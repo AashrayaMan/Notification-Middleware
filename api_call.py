@@ -2,42 +2,43 @@ import requests
 import hmac
 import hashlib
 import time
+import base64
 
-def make_api_request(url, method, payload, secret_key):
-    # Convert secret_key to bytes
-    secret_key = secret_key.encode('utf-8')
-
-    # Create a timestamp
+def request_api_with_hmac(url, method, payload, secret_key):
     timestamp = str(int(time.time()))
-
-    # Combine the elements to be signed
+    
     string_to_sign = f"{method}\n{url}\n{timestamp}\n{payload}"
     
-    # Create the HMAC signature
-    signature = hmac.new(secret_key, string_to_sign.encode('utf-8'), hashlib.sha256).hexdigest()
-
-    # Prepare headers
+    # Create the HMAC signature using SHA-512 and encode it in Base64
+    signature = base64.b64encode(
+        hmac.new(
+            secret_key.encode('utf-8'),
+            string_to_sign.encode('utf-8'),
+            hashlib.sha512  # Changed to SHA-512
+        ).digest()
+    ).decode('utf-8')
+    
     headers = {
         'Content-Type': 'application/json',
         'X-Timestamp': timestamp,
         'X-Signature': signature
     }
-
-    # Make the request
+    
     if method == 'GET':
         response = requests.get(url, headers=headers)
     elif method == 'POST':
         response = requests.post(url, headers=headers, data=payload)
-    # Add other methods as needed
-
+    else:
+        raise ValueError("Unsupported HTTP method")
+    
     return response
 
 # Example usage
 url = 'https://api.example.com/endpoint'
 method = 'POST'
 payload = '{"key": "value"}'
-secret_key = 'your_secret_key'
+secret_key = 'your_secret_key_here'
 
-response = make_api_request(url, method, payload, secret_key)
-print(response.status_code)
-print(response.text)
+response = request_api_with_hmac(url, method, payload, secret_key)
+print(f"Status Code: {response.status_code}")
+print(f"Response: {response.text}")
