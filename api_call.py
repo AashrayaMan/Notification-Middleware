@@ -4,6 +4,7 @@ import hashlib
 import time
 import base64
 
+
 def request_api_with_hmac(url, method, payload, secret_key):
     timestamp = str(int(time.time()))
     
@@ -42,3 +43,5 @@ secret_key = 'your_secret_key_here'
 response = request_api_with_hmac(url, method, payload, secret_key)
 print(f"Status Code: {response.status_code}")
 print(f"Response: {response.text}")
+
+#water
