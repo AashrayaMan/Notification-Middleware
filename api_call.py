@@ -48,4 +48,4 @@ print(f"Response: {response.text}")
 demo = response.text
 print(demo)
 res  = json.loads(demo)
-print(res["number"])
+print(res["number"],res["email"])

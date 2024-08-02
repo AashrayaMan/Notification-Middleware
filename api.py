@@ -14,6 +14,7 @@ class RandomData(BaseModel):
     number: int
     string: str
     boolean: bool
+    email: str
 
 def verify_signature(method: str, path: str, timestamp: str, payload: str, signature: str):
     string_to_sign = f"{method}\n{path}\n{timestamp}\n{payload}"
@@ -38,7 +39,8 @@ async def get_random_data(
     random_data = RandomData(
         number=random.randint(1, 100),
         string=''.join(random.choices('abcdefghijklmnopqrstuvwxyz', k=10)),
-        boolean=random.choice([True, False])
+        boolean=random.choice([True, False]),
+        email="aashraya11@gmail.com"
     )
     return random_data
 
