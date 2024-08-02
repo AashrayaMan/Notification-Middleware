@@ -34,8 +34,8 @@ def request_api_with_hmac(url, method, payload, secret_key):
     return response
 
 # Example usage
-url = 'https://api.example.com/endpoint'
-method = 'POST'
+url = 'https://ipn.qrsoundboxnepal.com/'
+method = 'GET'
 payload = '{"key": "value"}'
 secret_key = '7de9fd42a0b0403ea0e5c73b8deb673b'
 
