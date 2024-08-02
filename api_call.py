@@ -1,20 +1,24 @@
 import requests
+import time
 import hmac
 import hashlib
-import time
 import base64
+import json
 
 def request_api_with_hmac(url, method, payload, secret_key):
     timestamp = str(int(time.time()))
     
-    string_to_sign = f"{method}\n{url}\n{timestamp}\n{payload}"
+    parsed_url = requests.utils.urlparse(url)
+    path = parsed_url.path or "/"
     
-    # Create the HMAC signature using SHA-512 and encode it in Base64
+    string_to_sign = f"{method}\n{path}\n{timestamp}\n{payload}"
+    print(f"Client string to sign: {string_to_sign}")  # Debug print
+    
     signature = base64.b64encode(
         hmac.new(
             secret_key.encode('utf-8'),
             string_to_sign.encode('utf-8'),
-            hashlib.sha512  # Changed to SHA-512
+            hashlib.sha512
         ).digest()
     ).decode('utf-8')
     
@@ -33,12 +37,15 @@ def request_api_with_hmac(url, method, payload, secret_key):
     
     return response
 
-# Example usage
-url = 'https://ipn.qrsoundboxnepal.com/'
+url = 'http://localhost:8000/random'
 method = 'GET'
-payload = '{"key": "value"}'
+payload = ''
 secret_key = '7de9fd42a0b0403ea0e5c73b8deb673b'
 
 response = request_api_with_hmac(url, method, payload, secret_key)
 print(f"Status Code: {response.status_code}")
 print(f"Response: {response.text}")
+demo = response.text
+print(demo)
+res  = json.loads(demo)
+print(res["number"])
