@@ -37,7 +37,7 @@ def request_api_with_hmac(url, method, payload, secret_key):
 url = 'https://api.example.com/endpoint'
 method = 'POST'
 payload = '{"key": "value"}'
-secret_key = 'your_secret_key_here'
+secret_key = '7de9fd42a0b0403ea0e5c73b8deb673b'
 
 response = request_api_with_hmac(url, method, payload, secret_key)
 print(f"Status Code: {response.status_code}")
