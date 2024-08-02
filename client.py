@@ -4,7 +4,7 @@ from email_sender import email_alert,sms_alert
 
 def on_reply_message_received(ch, method, properties, body):
     print(f"reply recieved: {body}")
-    email_alert("KOILITEAM","A message from Koili Team","pokharelsamir246@gmail.com")
+    email_alert("KOILITEAM","A message from Koili Team","aashraya11@gmail.com")
 
 connection_parameters = pika.ConnectionParameters('localhost')
 
