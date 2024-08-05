@@ -37,7 +37,7 @@ def request_api_with_hmac(url, method, payload, secret_key):
     
     return response
 
-url = 'http://localhost:8000/random'
+url = ' https://ipn-staging.qrsoundboxnepal.com'
 method = 'GET'
 payload = ''
 secret_key = '7de9fd42a0b0403ea0e5c73b8deb673b'
@@ -48,6 +48,6 @@ print(f"Response: {response.text}")
 demo = response.text
 res  = json.loads(demo)
 
-Ph_no = res["number"]
-Email = res["email"]
-merchant_id = res["merchant_id"]
+# Ph_no = res["number"]
+# Email = res["email"]
+# merchant_id = res["merchant_id"]
