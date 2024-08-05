@@ -1,71 +1,88 @@
-from flask import Flask, request, jsonify
+import requests
+import json
 import hmac
 import hashlib
 import base64
-import json
+import uuid
 
-app = Flask(__name__)
+class FonepayNotificationAPI:
+    def __init__(self, base_url, api_key, api_secret):
+        self.base_url = base_url
+        self.api_key = api_key
+        self.api_secret = api_secret
 
-# Replace these with your actual API key and secret
-API_KEY = "test@test.com.np"
-API_SECRET = "your_api_secret_here"
+    def generate_signature(self, nonce, body):
+        signature_data = f" {self.api_key} {nonce} {body} "
+        hmac_obj = hmac.new(self.api_secret.encode(), signature_data.encode(), hashlib.sha512)
+        return base64.b64encode(hmac_obj.digest()).decode()
 
-def verify_hmac(api_key, nonce, signature, body):
-    # Reconstruct the signature data
-    signature_data = f" {api_key} {nonce} {body} "
-    
-    # Generate HMAC
-    hmac_obj = hmac.new(API_SECRET.encode(), signature_data.encode(), hashlib.sha512)
-    expected_signature = base64.b64encode(hmac_obj.digest()).decode()
-    
-    return hmac.compare_digest(signature, expected_signature)
-
-@app.route('/notification/send', methods=['POST'])
-def send_notification():
-    # Check content type
-    if request.headers.get('Content-Type') != 'application/json':
-        return jsonify({"error": "Content-Type must be application/json"}), 400
-
-    # Parse authorization header
-    auth_header = request.headers.get('Authorization')
-    if not auth_header or not auth_header.startswith('HmacSHA512 '):
-        return jsonify({"error": "Invalid Authorization header"}), 401
-
-    auth_parts = auth_header[11:].split(':')
-    if len(auth_parts) != 3:
-        return jsonify({"error": "Invalid Authorization header format"}), 401
-
-    api_key, nonce, signature = auth_parts
-
-    # Verify API key
-    if api_key != API_KEY:
-        return jsonify({"error": "Invalid API key"}), 401
-
-    # Get request body as a string
-    body = request.data.decode('utf-8')
-
-    # Verify HMAC signature
-    if not verify_hmac(api_key, nonce, signature, body):
-        return jsonify({"error": "Invalid signature"}), 401
-
-    # Parse and validate request body
-    try:
-        data = json.loads(body)
-        required_fields = ['mobileNumber', 'remark1', 'retrievalReferenceNumber', 'amount', 'merchantId', 'terminalId', 'type', 'uniqueId', 'properties']
-        for field in required_fields:
-            if field not in data:
-                return jsonify({"error": f"Missing required field: {field}"}), 400
+    def send_notification(self, payload):
+        url = f"{self.base_url}/notification/send"
         
-        required_properties = ['txnDate', 'secondaryMobileNumber', 'email', 'sessionSrlNo', 'commission', 'initiator']
-        for prop in required_properties:
-            if prop not in data['properties']:
-                return jsonify({"error": f"Missing required property: {prop}"}), 400
-    except json.JSONDecodeError:
-        return jsonify({"error": "Invalid JSON in request body"}), 400
+        body = json.dumps(payload, separators=(',', ':'))
+        nonce = str(uuid.uuid4())
+        signature = self.generate_signature(nonce, body)
+        
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': f'HmacSHA512 {self.api_key}:{nonce}:{signature}'
+        }
+        
+        response = requests.post(url, data=body, headers=headers)
+        
+        print(f"Send Notification Status Code: {response.status_code}")
+        print(f"Send Notification Response: {response.text}")
 
-    # Process the notification (implement your logic here)
-    # For this example, we'll just return a success message
-    return jsonify({"message": "Notification sent successfully"}), 200
+    def get_last_5_transactions(self, merchant_id, terminal_id):
+        url = f"{self.base_url}/callback"
+        
+        payload = {
+            "merchantId": merchant_id,
+            "terminalId": terminal_id
+        }
+        
+        body = json.dumps(payload, separators=(',', ':'))
+        nonce = str(uuid.uuid4())
+        signature = self.generate_signature(nonce, body)
+        
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': f'HmacSHA512 {self.api_key}:{nonce}:{signature}'
+        }
+        
+        response = requests.post(url, data=body, headers=headers)
+        
+        print(f"Callback Status Code: {response.status_code}")
+        print(f"Callback Response: {response.text}")
 
-if __name__ == '__main__':
-    app.run(debug=True)
+# Usage
+base_url = "http://localhost:5000"  # Our mock server URL
+api_key = "test@test.com.np"  # Must match the mock server
+api_secret = "testApiSecret"  # Must match the mock server
+
+api = FonepayNotificationAPI(base_url, api_key, api_secret)
+
+# Send Notification
+notification_payload = {
+    "mobileNumber": "98xxxxxxxx",
+    "remark1": "Message to send",
+    "retrievalReferenceNumber": "701125454",
+    "amount": "400",
+    "merchantId": "99XXXXXXXXXX",
+    "terminalId": "222202XXXXXXXXXX",
+    "type": "alert",
+    "uniqueId": "202307201141001",
+    "properties": {
+        "txnDate": "2023-07-22 01:00:10",
+        "secondaryMobileNumber": "9012325645",
+        "email": "cn@fpay.com",
+        "sessionSrlNo": "69",
+        "commission": "10.00",
+        "initiator": "98xxxxxxxx"
+    }
+}
+
+api.send_notification(notification_payload)
+
+# Get Last 5 Transactions
+api.get_last_5_transactions("99XXXXXXXXXX", "222202XXXXXXXXXX")
