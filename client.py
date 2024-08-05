@@ -9,6 +9,7 @@ def on_reply_message_received(ch, method, properties, body):
     email_alert("KOILITEAM",
                 f"A message from Koili Team to {merchant_id}",
                 {Email})
+    channel.stop_consuming()
 
 def run_another_script():
     subprocess.run(["python", "api_call.py"], check=True)
