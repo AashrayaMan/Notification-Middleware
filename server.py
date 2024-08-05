@@ -8,16 +8,14 @@ def on_request_message_received(ch, method, properties, body):
 
 connection_parameters = pika.ConnectionParameters('localhost')
 
-# # Replace 'localhost' with the IP address or hostname of your RabbitMQ server
+# Replace 'localhost' with the IP address or hostname of your RabbitMQ server
 # server_address = 'your_rabbitmq_server_address'
-# # Add credentials if required
 # credentials = pika.PlainCredentials('your_username', 'your_password')
 
 # connection_parameters = pika.ConnectionParameters(
 #     host=server_address,
 #     credentials=credentials,
-#     # Add any other necessary parameters like port, virtual_host, etc.
-# )
+
 
 connection = pika.BlockingConnection(connection_parameters)
 
