@@ -22,7 +22,7 @@ connection = pika.BlockingConnection(connection_parameters)
 
 channel = connection.channel()
 
-reply_queue = channel.queue_declare(queue='', exclusive=True)
+reply_queue = channel.queue_declare(queue=f'{merchant_id}', exclusive=True)
 
 channel.basic_consume(queue=reply_queue.method.queue, auto_ack=True,
     on_message_callback=on_reply_message_received)
