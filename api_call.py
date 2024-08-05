@@ -46,6 +46,8 @@ response = request_api_with_hmac(url, method, payload, secret_key)
 print(f"Status Code: {response.status_code}")
 print(f"Response: {response.text}")
 demo = response.text
-print(demo)
 res  = json.loads(demo)
-print(res["number"],res["email"])
+
+Ph_no = res["number"]
+Email = res["email"]
+merchant_id = res["merchant_id"]

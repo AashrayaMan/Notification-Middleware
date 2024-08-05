@@ -5,16 +5,19 @@ import time
 import hmac
 import hashlib
 import base64
+import uuid
 
 app = FastAPI()
 
 SECRET_KEY = "7de9fd42a0b0403ea0e5c73b8deb673b"
+mer_id = str(uuid.uuid4())
 
 class RandomData(BaseModel):
     number: int
     string: str
     boolean: bool
     email: str
+    merchant_id:str
 
 def verify_signature(method: str, path: str, timestamp: str, payload: str, signature: str):
     string_to_sign = f"{method}\n{path}\n{timestamp}\n{payload}"
@@ -40,7 +43,8 @@ async def get_random_data(
         number=random.randint(1, 100),
         string=''.join(random.choices('abcdefghijklmnopqrstuvwxyz', k=10)),
         boolean=random.choice([True, False]),
-        email="aashraya11@gmail.com"
+        email="aashraya11@gmail.com",
+        merchant_id = mer_id
     )
     return random_data
 

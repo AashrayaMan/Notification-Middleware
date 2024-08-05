@@ -1,10 +1,19 @@
 import pika
 import uuid
 from email_sender import email_alert,sms_alert
+from api_call import Ph_no,Email,merchant_id
+import subprocess
 
 def on_reply_message_received(ch, method, properties, body):
     print(f"reply recieved: {body}")
-    email_alert("KOILITEAM","A message from Koili Team","aashraya11@gmail.com")
+    email_alert("KOILITEAM",
+                f"A message from Koili Team to {merchant_id}",
+                {Email})
+
+def run_another_script():
+    subprocess.run(["python", "api_call.py"], check=True)
+
+run_another_script()
 
 connection_parameters = pika.ConnectionParameters('localhost')
 
