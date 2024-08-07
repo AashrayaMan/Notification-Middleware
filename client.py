@@ -1,8 +1,12 @@
 import pika
 import uuid
-from email_sender import email_alert,sms_alert
+from email_sender import email_alert, sms_alert
 from phonepay_api import transaction_dict, amount, merchant_id, mobile_number, email, commission
 import subprocess
+import logging
+
+# Configure logging for Pika
+logging.getLogger("pika").setLevel(logging.WARNING)
 
 def on_reply_message_received(ch, method, properties, body):
     print(f"reply recieved: {body}")
