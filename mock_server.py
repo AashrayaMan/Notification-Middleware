@@ -1,15 +1,16 @@
-from flask import Flask, request, jsonify
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import JSONResponse
 import hmac
 import hashlib
 import base64
 
-app = Flask(__name__)
+app = FastAPI()
 
 # Mock API key and secret
 API_KEY = "test@test.com.np"
 API_SECRET = "testApiSecret"
 
-def verify_signature(auth_header, body):
+def verify_signature(auth_header: str, body: bytes) -> bool:
     parts = auth_header.split()
     if len(parts) != 2 or parts[0] != "HmacSHA512":
         return False
@@ -18,21 +19,22 @@ def verify_signature(auth_header, body):
     if api_key != API_KEY:
         return False
     
-    expected_signature = generate_signature(nonce, body)
+    expected_signature = generate_signature(nonce, body.decode())
     return signature == expected_signature
 
-def generate_signature(nonce, body):
+def generate_signature(nonce: str, body: str) -> str:
     signature_data = f" {API_KEY} {nonce} {body} "
     hmac_obj = hmac.new(API_SECRET.encode(), signature_data.encode(), hashlib.sha512)
     return base64.b64encode(hmac_obj.digest()).decode()
 
-@app.route('/notification/send', methods=['POST'])
-def send_notification():
-    if not verify_signature(request.headers.get('Authorization', ''), request.data.decode()):
-        return jsonify({"error": "Invalid authorization"}), 403
+@app.post('/notification/send')
+async def send_notification(request: Request):
+    body = await request.body()
+    if not verify_signature(request.headers.get('Authorization', ''), body):
+        raise HTTPException(status_code=403, detail="Invalid authorization")
     
     # Mock successful response
-    return jsonify({
+    return JSONResponse({
         "status": True,
         "message": "SMS delivered successfully",
         "code": "0",
@@ -43,13 +45,14 @@ def send_notification():
         "httpStatus": 200
     })
 
-@app.route('/callback', methods=['POST'])
-def callback():
-    if not verify_signature(request.headers.get('Authorization', ''), request.data.decode()):
-        return jsonify({"error": "Invalid authorization"}), 403
+@app.post('/callback')
+async def callback(request: Request):
+    body = await request.body()
+    if not verify_signature(request.headers.get('Authorization', ''), body):
+        raise HTTPException(status_code=403, detail="Invalid authorization")
     
     # Mock response with last 5 transactions
-    return jsonify({
+    return JSONResponse({
         "transactionNotificationDetails": [
             {
                 "mobileNumber": "98xxxxxxxx",
@@ -74,4 +77,5 @@ def callback():
     })
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=5000)
