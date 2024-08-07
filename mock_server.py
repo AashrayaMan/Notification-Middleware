@@ -63,7 +63,7 @@ def callback():
                 "properties": {
                     "txnDate": "2023-07-22 01:00:10",
                     "secondaryMobileNumber": "98xxxxxxxx",
-                    "email": "fpaxxx@fpay.com",
+                    "email": "aashraya11@gmail.com",
                     "sessionSrlNo": "69",
                     "commission": "10.00",
                     "initiator": "98xxxxxxxx"

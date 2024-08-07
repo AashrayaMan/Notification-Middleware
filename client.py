@@ -1,14 +1,14 @@
 import pika
 import uuid
 from email_sender import email_alert,sms_alert
-from api_call import Ph_no,Email,merchant_id
+from phonepay_api import email,amount,merchant_id
 import subprocess
 
 def on_reply_message_received(ch, method, properties, body):
     print(f"reply recieved: {body}")
     email_alert("KOILITEAM",
-                f"A message from Koili Team to {merchant_id}",
-                {Email})
+                f"Merchant-id:{merchant_id} Rs{amount} has been received.",
+                {email})
     channel.stop_consuming()
 
 def run_another_script():

@@ -104,3 +104,36 @@ if __name__ == "__main__":
     transactions_response = api.get_last_5_transactions("99XXXXXXXXXX", "222202XXXXXXXXXX")
     if transactions_response:
         logging.info(f"Transactions Response: {json.dumps(transactions_response, indent=2)}")
+        
+        transaction_details = transactions_response.get('transactionNotificationDetails', [])
+        
+        if transaction_details:
+            # Accessing the first transaction
+            first_transaction = transaction_details[0]
+            
+            # Storing entire transaction data
+            transaction_data = first_transaction
+            
+            # Accessing individual fields
+            amount = transaction_data.get('amount')
+            merchant_id = transaction_data.get('merchantId')
+            mobile_number = transaction_data.get('mobileNumber')
+            
+            # Accessing nested properties
+            properties = transaction_data.get('properties', {})
+            commission = properties.get('commission')
+            email = properties.get('email')
+            
+            # # Logging some of the extracted data
+            # logging.info(f"Stored Transaction Data:")
+            # logging.info(f"Amount: {amount}")
+            # logging.info(f"Merchant ID: {merchant_id}")
+            # logging.info(f"Mobile Number: {mobile_number}")
+            # logging.info(f"Commission: {commission}")
+            # logging.info(f"Email: {email}")
+            
+            # You can now use transaction_data or individual variables as needed
+        else:
+            logging.info("No transaction details found in the response")
+    else:
+        logging.error("Failed to retrieve transaction details")
