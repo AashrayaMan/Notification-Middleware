@@ -2,7 +2,7 @@ import requests
 import json
 
 # API endpoint URL
-url = "https://ipn-staging.qrsoundboxnepal.com/api/v1/notify"
+url = "https://ipn.qrsoundboxnepal.com/api/v1/notify"
 
 # Headers
 headers = {
