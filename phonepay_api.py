@@ -1,3 +1,5 @@
+# phonepay_api.py
+
 import requests
 import json
 import hmac
@@ -68,7 +70,13 @@ class FonepayNotificationAPI:
             self.logger.error(f"An error occurred while getting transactions: {e}")
             return None
 
-# Usage
+# Initialize API and get transaction data
+base_url = "http://localhost:5000"  # Our mock server URL
+api_key = "test@test.com.np"  # Must match the mock server
+api_secret = "testApiSecret"  # Must match the mock server
+
+api = FonepayNotificationAPI(base_url, api_key, api_secret)
+
 if __name__ == "__main__":
     base_url = "http://localhost:5000"  # Our mock server URL
     api_key = "test@test.com.np"  # Must match the mock server
@@ -100,40 +108,53 @@ if __name__ == "__main__":
     if notification_response:
         logging.info(f"Notification Response: {json.dumps(notification_response, indent=2)}")
 
-    # Get Last 5 Transactions
-    transactions_response = api.get_last_5_transactions("99XXXXXXXXXX", "222202XXXXXXXXXX")
-    if transactions_response:
-        logging.info(f"Transactions Response: {json.dumps(transactions_response, indent=2)}")
+# Get Last 5 Transactions
+transactions_response = api.get_last_5_transactions("99XXXXXXXXXX", "222202XXXXXXXXXX")
+
+transaction_dict = None
+amount = None
+merchant_id = None
+mobile_number = None
+email = None
+commission = None
+
+if transactions_response:
+    transaction_details = transactions_response.get('transactionNotificationDetails', [])
+    
+    if transaction_details:
+        first_transaction = transaction_details[0]
         
-        transaction_details = transactions_response.get('transactionNotificationDetails', [])
+        transaction_dict = {
+            "amount": first_transaction.get("amount"),
+            "merchantId": first_transaction.get("merchantId"),
+            "mobileNumber": first_transaction.get("mobileNumber"),
+            "remark1": first_transaction.get("remark1"),
+            "retrievalReferenceNumber": first_transaction.get("retrievalReferenceNumber"),
+            "terminalId": first_transaction.get("terminalId"),
+            "type": first_transaction.get("type"),
+            "uniqueId": first_transaction.get("uniqueId"),
+            "properties": first_transaction.get("properties", {})
+        }
         
-        if transaction_details:
-            # Accessing the first transaction
-            first_transaction = transaction_details[0]
-            
-            # Storing entire transaction data
-            transaction_data = first_transaction
-            
-            # Accessing individual fields
-            amount = transaction_data.get('amount')
-            merchant_id = transaction_data.get('merchantId')
-            mobile_number = transaction_data.get('mobileNumber')
-            
-            # Accessing nested properties
-            properties = transaction_data.get('properties', {})
-            commission = properties.get('commission')
-            email = properties.get('email')
-            
-            # # Logging some of the extracted data
+        amount = transaction_dict.get('amount')
+        merchant_id = transaction_dict.get('merchantId')
+        mobile_number = transaction_dict.get('mobileNumber')
+        
+        properties = transaction_dict.get('properties', {})
+        commission = properties.get('commission')
+        email = properties.get('email')
+
+         # # Logging some of the extracted data
             # logging.info(f"Stored Transaction Data:")
             # logging.info(f"Amount: {amount}")
             # logging.info(f"Merchant ID: {merchant_id}")
             # logging.info(f"Mobile Number: {mobile_number}")
             # logging.info(f"Commission: {commission}")
             # logging.info(f"Email: {email}")
-            
-            # You can now use transaction_data or individual variables as needed
-        else:
-            logging.info("No transaction details found in the response")
+
+if __name__ == "__main__":
+    if transaction_dict:
+        print("Transaction data:")
+        print(json.dumps(transaction_dict, indent=2))
     else:
-        logging.error("Failed to retrieve transaction details")
+        print("Failed to retrieve transaction data")

@@ -1,7 +1,7 @@
 import pika
 import uuid
 from email_sender import email_alert,sms_alert
-from phonepay_api import email,amount,merchant_id
+from phonepay_api import transaction_dict, amount, merchant_id, mobile_number, email, commission
 import subprocess
 
 def on_reply_message_received(ch, method, properties, body):
@@ -12,7 +12,7 @@ def on_reply_message_received(ch, method, properties, body):
     channel.stop_consuming()
 
 def run_another_script():
-    subprocess.run(["python", "api_call.py"], check=True)
+    subprocess.run(["python", "phonepay_api.py"], check=True)
 
 run_another_script()
 
