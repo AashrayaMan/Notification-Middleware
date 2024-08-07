@@ -1,5 +1,3 @@
-# phonepay_api.py
-
 import requests
 import json
 import hmac
