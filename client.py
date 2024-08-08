@@ -1,24 +1,25 @@
 import pika
 import uuid
 from email_sender import email_alert, sms_alert
-from phonepay_api import transaction_dict, amount, merchant_id, mobile_number, email, commission
-import subprocess
 import logging
+import sys
 
 # Configure logging for Pika
 logging.getLogger("pika").setLevel(logging.WARNING)
 
+# Get transaction details from command-line arguments
+merchant_id = sys.argv[1]
+amount = sys.argv[2]
+mobile_number = sys.argv[3]
+email = sys.argv[4]
+commission = sys.argv[5]
+
 def on_reply_message_received(ch, method, properties, body):
-    print(f"reply recieved: {body}")
+    print(f"reply received: {body}")
     email_alert("KOILITEAM",
                 f"Merchant-id:{merchant_id} Rs{amount} has been received.",
                 {email})
     channel.stop_consuming()
-
-def run_another_script():
-    subprocess.run(["python", "phonepay_api.py"], check=True)
-
-run_another_script()
 
 connection_parameters = pika.ConnectionParameters('localhost')
 
@@ -33,7 +34,7 @@ channel.basic_consume(queue=reply_queue.method.queue, auto_ack=True,
 
 channel.queue_declare(queue='request-queue')
 
-message = 'Can I request a reply?'
+message = f'Transaction: Merchant ID: {merchant_id}, Amount: {amount}, Mobile: {mobile_number}, Commission: {commission}'
 
 cor_id = str(uuid.uuid4())
 print(f"Sending Request: {cor_id}")

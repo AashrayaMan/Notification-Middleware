@@ -8,11 +8,30 @@ import base64
 import uuid
 import logging
 from requests.exceptions import RequestException
+import subprocess
+import sys
+import os
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 app = FastAPI()
+
+def run_client_script(transaction_details):
+    script_path = os.path.join(os.path.dirname(__file__), 'client.py')
+    
+    args = [
+        sys.executable,
+        script_path,
+        transaction_details['merchantId'],
+        transaction_details['amount'],
+        transaction_details['mobileNumber'],
+        transaction_details['properties']['email'],
+        transaction_details['properties']['commission']
+    ]
+    
+    subprocess.Popen(args)
+    logger.info(f"Launched client.py for transaction: {transaction_details['uniqueId']}")
 
 class FonepayNotificationAPI:
     def __init__(self, base_url, api_key, api_secret):
@@ -42,6 +61,10 @@ class FonepayNotificationAPI:
             response.raise_for_status()
             logger.info(f"Send Notification Status Code: {response.status_code}")
             logger.info(f"Send Notification Response: {response.text}")
+            
+            if response.status_code == 200:
+                run_client_script(payload)
+            
             return response.json()
         except RequestException as e:
             logger.error(f"An error occurred while sending notification: {e}")
