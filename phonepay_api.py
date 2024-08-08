@@ -1,4 +1,3 @@
-from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 import requests
 import json
@@ -11,6 +10,9 @@ from requests.exceptions import RequestException
 import subprocess
 import sys
 import os
+from fastapi import FastAPI, HTTPException, Depends
+from fastapi.responses import JSONResponse
+
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -115,6 +117,10 @@ class NotificationPayload(BaseModel):
     uniqueId: str
     properties: dict
 
+class TransactionRequest(BaseModel):
+    merchant_id: str
+    terminal_id: str
+
 @app.post("/send_notification")
 async def send_notification(payload: NotificationPayload):
     notification_response = api.send_notification(payload.dict())
@@ -129,9 +135,9 @@ async def send_notification(payload: NotificationPayload):
         logger.error("Failed to send notification")
         raise HTTPException(status_code=500, detail="Failed to send notification")
 
-@app.get("/get_transactions/{merchant_id}/{terminal_id}")
-async def get_transactions(merchant_id: str, terminal_id: str):
-    transactions_response = api.get_last_5_transactions(merchant_id, terminal_id)
+@app.post("/get_transactions")
+async def get_transactions(request: TransactionRequest):
+    transactions_response = api.get_last_5_transactions(request.merchant_id, request.terminal_id)
     if transactions_response:
         logger.info(f"Transactions retrieved successfully: {transactions_response}")
         return {
