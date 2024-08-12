@@ -66,7 +66,7 @@ async def callback(request: Request):
                 "properties": {
                     "txnDate": "2023-07-22 01:00:10",
                     "secondaryMobileNumber": "98xxxxxxxx",
-                    "email": "aashraya11@gmail.com",
+                    "email": "random@gmail.com",
                     "sessionSrlNo": "69",
                     "commission": "10.00",
                     "initiator": "98xxxxxxxx"
