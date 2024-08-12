@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import requests
 import json
 import hmac
@@ -10,9 +10,9 @@ from requests.exceptions import RequestException
 import subprocess
 import sys
 import os
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
-
+from typing import Optional
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -22,14 +22,16 @@ app = FastAPI()
 def run_client_script(transaction_details):
     script_path = os.path.join(os.path.dirname(__file__), 'client.py')
     
+    properties = transaction_details.get('properties', {})
+    
     args = [
         sys.executable,
         script_path,
         transaction_details['merchantId'],
         transaction_details['amount'],
         transaction_details['mobileNumber'],
-        transaction_details['properties']['email'],
-        transaction_details['properties']['commission']
+        properties.get('email', ''),  # Use an empty string if 'email' is not present
+        properties.get('commission', '')  # Use an empty string if 'commission' is not present
     ]
     
     subprocess.Popen(args)
@@ -106,16 +108,24 @@ api_secret = "testApiSecret"  # Must match the mock server
 
 api = FonepayNotificationAPI(base_url, api_key, api_secret)
 
+class Properties(BaseModel):
+    txnDate: Optional[str] = None
+    secondaryMobileNumber: Optional[str] = None
+    email: Optional[str] = None
+    sessionSrlNo: Optional[str] = None
+    commission: Optional[str] = None
+    initiator: Optional[str] = None
+
 class NotificationPayload(BaseModel):
-    mobileNumber: str
-    remark1: str
-    retrievalReferenceNumber: str
-    amount: str
-    merchantId: str
-    terminalId: str
-    type: str
-    uniqueId: str
-    properties: dict
+    mobileNumber: str = Field(..., min_length=1)
+    remark1: str = Field(..., min_length=1)
+    retrievalReferenceNumber: str = Field(..., min_length=1)
+    amount: str = Field(..., min_length=1)
+    merchantId: str = Field(..., min_length=1)
+    terminalId: str = Field(..., min_length=1)
+    uniqueId: str = Field(..., min_length=1)
+    type: Optional[str] = None
+    properties: Optional[Properties] = None
 
 class TransactionRequest(BaseModel):
     merchant_id: str
@@ -123,17 +133,37 @@ class TransactionRequest(BaseModel):
 
 @app.post("/send_notification")
 async def send_notification(payload: NotificationPayload):
-    notification_response = api.send_notification(payload.dict())
-    if notification_response:
-        logger.info(f"Notification sent successfully: {notification_response}")
-        return {
-            "status": "success",
-            "message": "Notification sent successfully",
-            "response": notification_response
-        }
-    else:
-        logger.error("Failed to send notification")
-        raise HTTPException(status_code=500, detail="Failed to send notification")
+    try:
+        # Validate mandatory fields
+        mandatory_fields = [
+            "mobileNumber", "remark1", "retrievalReferenceNumber", 
+            "amount", "merchantId", "terminalId", "uniqueId"
+        ]
+        
+        for field in mandatory_fields:
+            if not getattr(payload, field):
+                raise ValueError(f"{field} is mandatory and cannot be empty")
+        
+        # If we reach this point, all mandatory fields are present and non-empty
+        notification_response = api.send_notification(payload.dict())
+        
+        if notification_response:
+            logger.info(f"Notification sent successfully: {notification_response}")
+            return {
+                "status": "success",
+                "message": "Notification sent successfully",
+                "response": notification_response
+            }
+        else:
+            logger.error("Failed to send notification")
+            raise HTTPException(status_code=500, detail="Failed to send notification")
+    
+    except ValueError as ve:
+        logger.error(f"Validation error: {str(ve)}")
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        logger.error(f"An error occurred: {str(e)}")
+        raise HTTPException(status_code=500, detail="An unexpected error occurred")
 
 @app.post("/get_transactions")
 async def get_transactions(request: TransactionRequest):
