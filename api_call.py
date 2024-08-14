@@ -2,12 +2,12 @@ import requests
 import json
 
 # API endpoint URL
-url = "https://ipn.qrsoundboxnepal.com/api/v1/notify"
+url = "https://ipn-staging.qrsoundboxnepal.com/api/v1/notify"
 
 # Headers
 headers = {
     "Content-Type": "application/json",
-    "Subscription-Key": "7de9fd42a0b0403ea0e5c73b8deb673b"
+    "Subscription-Key": "36918384da4b491986a08f38b424edd3"
 }
 
 # Payload data
