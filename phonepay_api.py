@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI()
 
 def run_client_script(transaction_details):
-    script_path = os.path.join(os.path.dirname(__file__), 'client.py')
+    script_path = os.path.join(os.path.dirname(__file__), 'new_client.py')
     
     properties = transaction_details.get('properties', {})
     
