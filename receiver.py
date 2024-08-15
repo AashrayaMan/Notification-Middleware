@@ -14,8 +14,6 @@ mobile_number = sys.argv[3]
 email = sys.argv[4]
 commission = sys.argv[5]
 
-NUM_TRANSACTIONS = 100
-
 connection_parameters = pika.ConnectionParameters('localhost')
 connection = pika.BlockingConnection(connection_parameters)
 channel = connection.channel()

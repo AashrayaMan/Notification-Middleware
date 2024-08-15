@@ -1,8 +1,11 @@
 import requests
 import json
+from dotenv import load_dotenv
+import os
 
+load_dotenv()
 # API endpoint URL
-url = "https://ipn-staging.qrsoundboxnepal.com/api/v1/notify"
+url = os.getenv('API_ENDPOINT')
 
 # Headers
 headers = {
@@ -12,7 +15,7 @@ headers = {
 
 # Payload data
 payload = {
-    "amount": 3454.35,
+    "amount": os.getenv('AMOUNT'),
     "machineIdentifier": "c0eceb97-95ee-4000-8559-5376d74e507a"
 }
 

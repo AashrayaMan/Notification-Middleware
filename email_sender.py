@@ -3,6 +3,10 @@ from email.message import EmailMessage
 from twilio.rest import Client
 import logging
 from twilio.base.exceptions import TwilioRestException
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 # Configure root logger
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -35,9 +39,9 @@ def email_alert(subject, body, to):
     msg['subject'] = subject
     msg['to'] = to
 
-    user = "koiliteam1@gmail.com"
+    user = os.getenv('USER')
     msg['from'] = user
-    password = "yseg vcyp dlbx ewsy"
+    password = os.getenv('PASSWORD')
 
     try:
         server = smtplib.SMTP("smtp.gmail.com", 587)

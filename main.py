@@ -14,6 +14,10 @@ from fastapi import FastAPI, HTTPException, Depends
 from fastapi.responses import JSONResponse
 from typing import Optional
 import re
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -106,9 +110,9 @@ class FonepayNotificationAPI:
             return None
 
 # Initialize API
-base_url = "http://localhost:5000"  # Our mock server URL
-api_key = "test@test.com.np"  # Must match the mock server
-api_secret = "testApiSecret"  # Must match the mock server
+base_url = os.getenv('FONEPAY_API_URL')  # Our mock server URL
+api_key = os.getenv('FONEPAY_API_KEY')  
+api_secret = os.getenv('FONEPAY_API_SECRET')  
 
 api = FonepayNotificationAPI(base_url, api_key, api_secret)
 
