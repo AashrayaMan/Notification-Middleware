@@ -2,11 +2,7 @@ import pika
 import uuid
 import logging
 import sys
-import time
 from email_sender import email_alert
-import random
-import threading
-import concurrent.futures
 
 # Configure logging for Pika
 logging.getLogger("pika").setLevel(logging.WARNING)

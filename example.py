@@ -1,5 +1,4 @@
 import requests
-import time
 import random
 
 url = "http://localhost:8000/send_notification"
