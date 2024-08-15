@@ -24,7 +24,7 @@ connection_parameters = pika.ConnectionParameters('localhost')
 connection = pika.BlockingConnection(connection_parameters)
 channel = connection.channel()
 
-reply_queue = channel.queue_declare(queue=f'merchant-id:{merchant_id}', exclusive=True)
+reply_queue = channel.queue_declare(queue=f'merchant-id:{merchant_id}')
 reply_queue_name = reply_queue.method.queue
 
 def on_reply_message_received(ch, method, properties, body):
@@ -59,33 +59,3 @@ channel.basic_publish('', routing_key='request-queue', properties=pika.BasicProp
 
 channel.start_consuming()
 connection.close()
-
-
-    
-
-    
-
-    
-
-# def simulate_transactions():
-#     with concurrent.futures.ThreadPoolExecutor(max_workers=NUM_TRANSACTIONS) as executor:
-#         futures = []
-#         for _ in range(NUM_TRANSACTIONS):
-#             merchant = random.choice(MERCHANTS)
-#             amount = str(random.randint(10, 1000))
-#             mobile_number = f"98{random.randint(10000000, 99999999)}"
-#             commission = str(round(float(amount) * 0.02, 2))  # 2% commission
-
-#             future = executor.submit(process_transaction, merchant, amount, mobile_number, commission)
-#             futures.append(future)
-
-#         # Wait for all transactions to complete
-#         concurrent.futures.wait(futures)
-
-# if __name__ == "__main__":
-#     start_time = time.time()
-#     simulate_transactions()
-#     end_time = time.time()
-#     total_time = end_time - start_time
-#     print(f"\nTotal time taken: {total_time:.2f} seconds")
-#     print(f"Average time per transaction: {total_time/NUM_TRANSACTIONS:.4f} seconds")

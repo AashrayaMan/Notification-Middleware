@@ -1,8 +1,9 @@
 import pika
-import json
 import threading
 import time
-from email_sender import email_alert
+import logging
+
+logging.getLogger("pika").setLevel(logging.WARNING)
 
 def process_messages(messages):
     # Process all messages and generate replies
@@ -16,22 +17,7 @@ def process_messages(messages):
         })
     return replies
 
-def send_email(merchant_id, amount, mobile_number, commission, email):
-    email_subject = f"Payment Confirmation - {merchant_id}"
-    email_body = f"""
-    Dear Merchant,
-
-    A payment of Rs{amount} has been received from {mobile_number}.
-    Commission: Rs{commission}
-
-    Thank you for using our payment system.
-    """
-    email_alert(email_subject, email_body, email)
-
 def on_request_message_received(ch, method, properties, body):
-    print(f"Received Request: {properties.correlation_id}")
-    print(f"Message: {body}")
-    
     # Parse the message body
     message_data = body.decode().split(', ')
     merchant_id = message_data[0].split(': ')[1]
@@ -50,24 +36,21 @@ def on_request_message_received(ch, method, properties, body):
         'commission': commission
     })
     
-    # Process individual message immediately
-    process_individual_message(ch, properties.correlation_id, properties.reply_to, body.decode(), 
-                               merchant_id, amount, mobile_number, commission)
+   
+    process_individual_message(ch, properties.correlation_id, properties.reply_to, body.decode())
+
     
-    # If batch size reached, process batch
     if len(message_batch) >= BATCH_SIZE:
         process_batch(ch)
 
-def process_individual_message(ch, correlation_id, reply_to, body, merchant_id, amount, mobile_number, commission):
+def process_individual_message(ch, correlation_id, reply_to, body):
     reply = f'Hey its your reply to {correlation_id}'
     ch.basic_publish('', 
                      routing_key=reply_to, 
                      properties=pika.BasicProperties(correlation_id=correlation_id),
                      body=reply)
-    print(f"Processed and sent reply for individual message: {correlation_id}")
     
-    # Send email for individual message
-    send_email(merchant_id, amount, mobile_number, commission, "merchant@example.com")  # Replace with actual email
+    print(f"Processed and sent reply for individual message: {correlation_id}")
 
 def process_batch(ch):
     global message_batch
@@ -79,10 +62,6 @@ def process_batch(ch):
                              properties=pika.BasicProperties(correlation_id=reply['correlation_id']),
                              body=reply['body'])
         
-        # Send emails for batch
-        for msg in message_batch:
-            send_email(msg['merchant_id'], msg['amount'], msg['mobile_number'], msg['commission'], "merchant@example.com")  # Replace with actual email
-        
         print(f"Processed and sent replies for {len(message_batch)} messages in batch")
         message_batch.clear()
 
@@ -93,29 +72,39 @@ def check_batch_timer():
         if message_batch:
             process_batch(channel)
 
+#For using External Server
+# rabbitmq_host = 'your_rabbitmq_host'
+# rabbitmq_port = 5672  # Default RabbitMQ port
+# rabbitmq_username = 'your_username'
+# rabbitmq_password = 'your_password'
+
+# credentials = pika.PlainCredentials(rabbitmq_username, rabbitmq_password)
+# connection_parameters = pika.ConnectionParameters(host=rabbitmq_host,
+#                                                   port=rabbitmq_port,
+#                                                   credentials=credentials)
+
 connection_parameters = pika.ConnectionParameters('localhost')
 connection = pika.BlockingConnection(connection_parameters)
 channel = connection.channel()
 
 channel.queue_declare(queue='request-queue')
 
-BATCH_SIZE = 100  # Adjust this value based on your needs
-BATCH_TIMEOUT = 60  # Process batch every 60 seconds if not full
+BATCH_SIZE = 100 
+BATCH_TIMEOUT = 10  
 message_batch = []
 
 # Start the batch timer thread
 timer_thread = threading.Thread(target=check_batch_timer, daemon=True)
 timer_thread.start()
 
+print("Starting Server")
+
 channel.basic_consume(queue='request-queue', auto_ack=True,
     on_message_callback=on_request_message_received)
-
-print("Starting Server")
 
 try:
     channel.start_consuming()
 except KeyboardInterrupt:
-    # Process any remaining messages in the batch before shutting down
     process_batch(channel)
     channel.stop_consuming()
 
