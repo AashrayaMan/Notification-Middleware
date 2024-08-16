@@ -42,7 +42,7 @@ Key features include:
 1. Clone the repository: 
 https://dev.azure.com/BitsKraft/Koili%20(IPN%20Platform)/_git/koili-notification-middleware?version=GBmain
 
-2. Run rabbit mq on Cmd
+2. Run rabbit mq on Cmd:
 docker run -d --name rabbitmq --restart always -p 5672:5672 -p 15672:15672 rabbitmq:3.13.4-management
 
 3. Install the required dependencies:
