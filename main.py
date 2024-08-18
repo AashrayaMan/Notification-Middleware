@@ -247,6 +247,7 @@ async def get_transactions(
         logger.error("Failed to retrieve transactions")
         raise HTTPException(status_code=500, detail="Failed to retrieve transactions")
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+# To run in development mode, use the command:
+# `fastapi dev`
+# For production, you can use a command like:
+# `fastapi run --host 0.0.0.0 --port 8000`

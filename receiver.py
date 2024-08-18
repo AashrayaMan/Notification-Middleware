@@ -18,10 +18,11 @@ connection_parameters = pika.ConnectionParameters('localhost')
 connection = pika.BlockingConnection(connection_parameters)
 channel = connection.channel()
 
-reply_queue = channel.queue_declare(queue=f'merchant-id:{merchant_id}')
+reply_queue = channel.queue_declare(queue=f'merchant-id:{merchant_id}', auto_delete=True)
 reply_queue_name = reply_queue.method.queue
 
 def on_reply_message_received(ch, method, properties, body):
+    try:
         print(f"Reply received for {merchant_id}: {body}")
         # Send email confirmation
         email_subject = f"Payment Confirmation - {merchant_id}"
@@ -34,7 +35,8 @@ def on_reply_message_received(ch, method, properties, body):
         Thank you for using our payment system.
         """
         email_alert(email_subject, email_body, {email})
-        channel.stop_consuming()
+    finally:
+        channel.stop_consuming()        
 
 channel.basic_consume(queue=reply_queue_name, auto_ack=True,
         on_message_callback=on_reply_message_received)
