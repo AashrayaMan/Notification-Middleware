@@ -3,6 +3,11 @@ import threading
 import time
 import logging
 
+# Set up logger
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+# Set Pika logger to WARNING to reduce noise
 logging.getLogger("pika").setLevel(logging.WARNING)
 
 def process_messages(messages):
@@ -50,7 +55,7 @@ def process_individual_message(ch, correlation_id, reply_to, body):
                      properties=pika.BasicProperties(correlation_id=correlation_id),
                      body=reply)
     
-    print(f"Processed and sent reply for individual message: {correlation_id}")
+    logger.info(f"Processed and sent reply for individual message: {correlation_id}")
 
 def process_batch(ch):
     global message_batch
@@ -62,7 +67,7 @@ def process_batch(ch):
                              properties=pika.BasicProperties(correlation_id=reply['correlation_id']),
                              body=reply['body'])
         
-        print(f"Processed and sent replies for {len(message_batch)} messages in batch")
+        logger.info(f"Processed and sent replies for {len(message_batch)} messages in batch")
         message_batch.clear()
 
 def check_batch_timer():
@@ -97,7 +102,7 @@ message_batch = []
 timer_thread = threading.Thread(target=check_batch_timer, daemon=True)
 timer_thread.start()
 
-print("Starting Server")
+logger.info("Starting Server")
 
 channel.basic_consume(queue='request-queue', auto_ack=True,
     on_message_callback=on_request_message_received)
