@@ -3,6 +3,11 @@ import json
 from dotenv import load_dotenv
 import os
 import sys
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 # API endpoint URL
@@ -28,19 +33,19 @@ def main(amount):
         # Check the response
         if response.status_code == 200:
             result = response.json()
-            print(f"Status Code: {response.status_code}")
-            print(f"Message: {result['message']}")
-            print(f"Response Code: {result['responseCode']}")
+            logger.info(f"Status Code: {response.status_code}")
+            logger.info(f"Message: {result['message']}")
+            logger.info(f"Response Code: {result['responseCode']}")
         else:
-            print(f"Error: Status Code {response.status_code}")
-            print(f"Response: {response.text}")
+            logger.error(f"Error: Status Code {response.status_code}")
+            logger.error(f"Response: {response.text}")
 
     except requests.exceptions.RequestException as e:
-        print(f"An error occurred: {e}")
+        logger.error(f"An error occurred: {e}")
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
-        print("Usage: python koili_ipn.py <amount>")
+        logger.error("Usage: python koili_ipn.py <amount>")
         sys.exit(1)
     
     amount = sys.argv[1]

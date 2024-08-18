@@ -4,6 +4,10 @@ import logging
 import sys
 from email_sender import email_alert
 
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
 # Configure logging for Pika
 logging.getLogger("pika").setLevel(logging.WARNING)
 
@@ -23,7 +27,7 @@ reply_queue_name = reply_queue.method.queue
 
 def on_reply_message_received(ch, method, properties, body):
     try:
-        print(f"Reply received for {merchant_id}: {body}")
+        logger.info(f"Reply received for {merchant_id}: {body}")
         # Send email confirmation
         email_subject = f"Payment Confirmation - {merchant_id}"
         email_body = f"""
@@ -46,7 +50,7 @@ channel.queue_declare(queue='request-queue')
 message =f'Transaction: Merchant ID: {merchant_id}, Amount: {amount}, Mobile: {mobile_number}, Commission: {commission}'
 
 cor_id = str(uuid.uuid4())
-print(f"Sending Request for {merchant_id}: {cor_id}")
+logger.info(f"Sending Request for {merchant_id}: {cor_id}")
 
 channel.basic_publish('', routing_key='request-queue', properties=pika.BasicProperties(
         reply_to=reply_queue_name,

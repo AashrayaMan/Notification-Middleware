@@ -21,7 +21,7 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-app = FastAPI()
+app = FastAPI(root_path="/api/v1")
 
 def run_client_script(transaction_details):
     script_path = os.path.join(os.path.dirname(__file__), 'receiver.py')
@@ -194,7 +194,7 @@ class TransactionRequest(BaseModel):
 def validate_notification_payload(payload: NotificationPayload):
     return payload
 
-@app.post("/send_notification")
+@app.post("/notification/send")
 async def send_notification(payload: NotificationPayload):
     try:
         logger.info("Received payload")
@@ -229,8 +229,8 @@ async def send_notification(payload: NotificationPayload):
         logger.error(f"An unexpected error occurred: {str(e)}")
         raise HTTPException(status_code=500, detail="An unexpected error occurred")
 
-@app.post("/get_transactions")
-async def get_transactions(
+@app.post("/callback")
+async def callback(
     request: TransactionRequest,
     payload: NotificationPayload = Depends(validate_notification_payload)
 ):
