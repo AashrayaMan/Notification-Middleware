@@ -15,7 +15,6 @@ from fastapi.responses import JSONResponse
 from typing import Optional
 import re
 from dotenv import load_dotenv
-import os
 
 load_dotenv()
 
@@ -45,6 +44,21 @@ def run_client_script(transaction_details):
     except Exception as e:
         logger.error(f"Error launching client script: {str(e)}")
 
+def run_koili_ipn(amount):
+    script_path = os.path.join(os.path.dirname(__file__), 'koili_ipn.py')
+    
+    args = [
+        sys.executable,
+        script_path,
+        str(amount)
+    ]
+    
+    try:
+        subprocess.Popen(args)
+        logger.info(f"Launched koili_ipn.py with amount: {amount}")
+    except Exception as e:
+        logger.error(f"Error launching koili_ipn script: {str(e)}")
+
 class FonepayNotificationAPI:
     def __init__(self, base_url, api_key, api_secret):
         self.base_url = base_url
@@ -73,9 +87,6 @@ class FonepayNotificationAPI:
             response.raise_for_status()
             logger.info(f"Send Notification Status Code: {response.status_code}")
             logger.info(f"Send Notification Response: {response.text}")
-            
-            if response.status_code == 200:
-                run_client_script(payload)
             
             return response.json()
         except RequestException as e:
@@ -110,9 +121,9 @@ class FonepayNotificationAPI:
             return None
 
 # Initialize API
-base_url = os.getenv('FONEPAY_API_URL')  # Our mock server URL
-api_key = os.getenv('FONEPAY_API_KEY')  
-api_secret = os.getenv('FONEPAY_API_SECRET')  
+base_url = os.getenv('FONEPAY_API_URL')
+api_key = os.getenv('FONEPAY_API_KEY')
+api_secret = os.getenv('FONEPAY_API_SECRET')
 
 api = FonepayNotificationAPI(base_url, api_key, api_secret)
 
@@ -191,6 +202,14 @@ async def send_notification(payload: NotificationPayload):
         
         if notification_response:
             logger.info(f"Notification sent successfully: {notification_response}")
+            
+            # Run koili_ipn.py with the amount from the transaction details
+            amount = payload.amount
+            run_koili_ipn(amount)
+            
+            # Run the client script
+            run_client_script(payload.model_dump())
+            
             return {
                 "status": "success",
                 "message": "Notification sent successfully",
