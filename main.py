@@ -197,7 +197,7 @@ def validate_notification_payload(payload: NotificationPayload):
 @app.post("/send_notification")
 async def send_notification(payload: NotificationPayload):
     try:
-        logger.info(f"Received payload: {payload.model_dump_json()}")
+        logger.info("Received payload")
         notification_response = api.send_notification(payload.model_dump())
         
         if notification_response:
