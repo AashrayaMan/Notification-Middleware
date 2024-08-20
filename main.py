@@ -245,7 +245,7 @@ async def callback(
         }
     else:
         logger.error("Failed to retrieve transactions")
-        raise HTTPException(status_code=500, detail="Failed to retrieve transactions")
+        raise HTTPException(status_code=500, detail="Failed to retrieve the transactions")
 
 # To run in development mode, use the command:
 # `fastapi dev`
