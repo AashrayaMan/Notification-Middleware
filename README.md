@@ -109,7 +109,7 @@ The system consists of several interconnected components:
 ### API Endpoints
 
 1. Send Notification
-- Endpoint: `POST /send_notification`
+- Endpoint: `POST /notification/send`
 - Payload example:
   ```json
   {
@@ -133,7 +133,7 @@ The system consists of several interconnected components:
   ```
 
 2. Get Transactions
-- Endpoint: `POST /get_transactions`
+- Endpoint: `POST /callback`
 - Payload example:
   ```json
   {
