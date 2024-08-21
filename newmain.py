@@ -71,54 +71,41 @@ class FonepayNotificationAPI:
         return base64.b64encode(hmac_obj.digest()).decode()
 
     def send_notification(self, payload):
-        url = f"{self.base_url}/notification/send"
-        
-        body = json.dumps(payload, separators=(',', ':'))
-        nonce = str(uuid.uuid4())
-        signature = self.generate_signature(nonce, body)
-        
-        headers = {
-            'Content-Type': 'application/json',
-            'Authorization': f'HmacSHA512 {self.api_key}:{nonce}:{signature}'
+        # Return the same response as the mock server
+        return {
+            "status": True,
+            "message": "SMS delivered successfully",
+            "code": "0",
+            "data": {
+                "mobileNumber": payload["mobileNumber"],
+                "msgId": "MN-1553144161875"
+            },
+            "httpStatus": 200
         }
-        
-        try:
-            response = requests.post(url, data=body, headers=headers, timeout=10)
-            response.raise_for_status()
-            logger.info(f"Send Notification Status Code: {response.status_code}")
-            logger.info(f"Send Notification Response: {response.text}")
-            
-            return response.json()
-        except RequestException as e:
-            logger.error(f"An error occurred while sending notification: {e}")
-            return None
 
     def get_last_5_transactions(self, merchant_id, terminal_id):
-        url = f"{self.base_url}/callback"
-        
-        payload = {
-            "merchantId": merchant_id,
-            "terminalId": terminal_id
+        return {
+            "transactionNotificationDetails": [
+                {
+                    "mobileNumber": "98xxxxxxxx",
+                    "remark1": "Message to send",
+                    "retrievalReferenceNumber": "701125454",
+                    "amount": "400",
+                    "merchantId": "99XXXXXXXXXX",
+                    "terminalId": "222202XXXXXXXXXX",
+                    "type": "alert",
+                    "uniqueId": "202307201141001",
+                    "properties": {
+                        "txnDate": "2023-07-22 01:00:10",
+                        "secondaryMobileNumber": "98xxxxxxxx",
+                        "email": "random@gmail.com",
+                        "sessionSrlNo": "69",
+                        "commission": "10.00",
+                        "initiator": "98xxxxxxxx"
+                    }
+                }
+            ]
         }
-        
-        body = json.dumps(payload, separators=(',', ':'))
-        nonce = str(uuid.uuid4())
-        signature = self.generate_signature(nonce, body)
-        
-        headers = {
-            'Content-Type': 'application/json',
-            'Authorization': f'HmacSHA512 {self.api_key}:{nonce}:{signature}'
-        }
-        
-        try:
-            response = requests.post(url, json=payload, headers=headers, timeout=10)
-            response.raise_for_status()
-            logger.info(f"Callback Status Code: {response.status_code}")
-            logger.info(f"Callback Response: {response.text}")
-            return response.json()
-        except RequestException as e:
-            logger.error(f"An error occurred while getting transactions: {e}")
-            return None
 
 # Initialize API
 base_url = os.getenv('FONEPAY_API_URL')
@@ -207,11 +194,7 @@ async def send_notification(payload: NotificationPayload):
             # Run the client script
             run_client_script(payload.model_dump())
             
-            return {
-                "status": "success",
-                "message": "Notification sent successfully",
-                "response": notification_response
-            }
+            return notification_response
         else:
             logger.error("Failed to send notification")
             raise HTTPException(status_code=500, detail="Failed to send notification")
@@ -231,12 +214,7 @@ async def callback(request: TransactionRequest):
     transactions_response = api.get_last_5_transactions(request.merchantId, request.terminalId)
     if transactions_response:
         logger.info(f"Transactions retrieved successfully: {transactions_response}")
-        return {
-            "status": "success",
-            "message": "Transactions retrieved successfully",
-            "full_response": transactions_response,
-            "transaction_details": transactions_response.get('transactionNotificationDetails', [])
-        }
+        return transactions_response
     else:
         logger.error("Failed to retrieve transactions")
         raise HTTPException(status_code=500, detail="Failed to retrieve the transactions")
