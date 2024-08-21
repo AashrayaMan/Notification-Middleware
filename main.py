@@ -10,7 +10,7 @@ from requests.exceptions import RequestException
 import subprocess
 import sys
 import os
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 from typing import Optional
 import re
@@ -111,7 +111,7 @@ class FonepayNotificationAPI:
         }
         
         try:
-            response = requests.post(url, data=body, headers=headers, timeout=10)
+            response = requests.post(url, json=payload, headers=headers, timeout=10)
             response.raise_for_status()
             logger.info(f"Callback Status Code: {response.status_code}")
             logger.info(f"Callback Response: {response.text}")
@@ -188,11 +188,8 @@ class NotificationPayload(BaseModel):
         return v
 
 class TransactionRequest(BaseModel):
-    merchant_id: str
-    terminal_id: str
-
-def validate_notification_payload(payload: NotificationPayload):
-    return payload
+    merchantId: str
+    terminalId: str
 
 @app.post("/notification/send")
 async def send_notification(payload: NotificationPayload):
@@ -230,11 +227,8 @@ async def send_notification(payload: NotificationPayload):
         raise HTTPException(status_code=500, detail="An unexpected error occurred")
 
 @app.post("/callback")
-async def callback(
-    request: TransactionRequest,
-    payload: NotificationPayload = Depends(validate_notification_payload)
-):
-    transactions_response = api.get_last_5_transactions(request.merchant_id, request.terminal_id)
+async def callback(request: TransactionRequest):
+    transactions_response = api.get_last_5_transactions(request.merchantId, request.terminalId)
     if transactions_response:
         logger.info(f"Transactions retrieved successfully: {transactions_response}")
         return {
