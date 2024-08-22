@@ -7,7 +7,6 @@ import base64
 import uuid
 import logging
 from requests.exceptions import RequestException
-import subprocess
 import sys
 import os
 from fastapi import FastAPI, HTTPException
@@ -15,6 +14,7 @@ from fastapi.responses import JSONResponse
 from typing import Optional
 import re
 from dotenv import load_dotenv
+import pika
 
 load_dotenv()
 
@@ -22,42 +22,6 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 app = FastAPI(root_path="/api/v1")
-
-def run_client_script(transaction_details):
-    script_path = os.path.join(os.path.dirname(__file__), 'receiver.py')
-    
-    properties = transaction_details.get('properties', {})
-    
-    args = [
-        sys.executable,
-        script_path,
-        transaction_details['merchantId'],
-        transaction_details['amount'],
-        transaction_details['mobileNumber'],
-        properties.get('email', ''),
-        properties.get('commission', '')
-    ]
-    
-    try:
-        subprocess.Popen(args)
-        logger.info(f"Launched client.py for transaction: {transaction_details['uniqueId']}")
-    except Exception as e:
-        logger.error(f"Error launching client script: {str(e)}")
-
-def run_koili_ipn(amount):
-    script_path = os.path.join(os.path.dirname(__file__), 'koili_ipn.py')
-    
-    args = [
-        sys.executable,
-        script_path,
-        str(amount)
-    ]
-    
-    try:
-        subprocess.Popen(args)
-        logger.info(f"Launched koili_ipn.py with amount: {amount}")
-    except Exception as e:
-        logger.error(f"Error launching koili_ipn script: {str(e)}")
 
 class FonepayNotificationAPI:
     def __init__(self, base_url, api_key, api_secret):
@@ -200,13 +164,31 @@ async def send_notification(payload: NotificationPayload):
         if notification_response:
             logger.info(f"Notification sent successfully: {notification_response}")
             
-            # Run koili_ipn.py with the amount from the transaction details
-            amount = payload.amount
-            run_koili_ipn(amount)
-            
-            # Run the client script
-            run_client_script(payload.model_dump())
-            
+            # Publish messages to queues
+            connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
+            channel = connection.channel()
+
+            # Declare queues
+            channel.queue_declare(queue='koili_ipn_queue')
+            channel.queue_declare(queue='email_queue')
+            channel.queue_declare(queue='sms_queue')
+
+            # Prepare message
+            message = json.dumps({
+                'amount': payload.amount,
+                'mobileNumber': payload.mobileNumber,
+                'email': payload.properties.email if payload.properties else None,
+                'merchantId': payload.merchantId,
+                'commission': payload.properties.commission if payload.properties else None
+            })
+
+            # Publish to queues
+            channel.basic_publish(exchange='', routing_key='koili_ipn_queue', body=message)
+            channel.basic_publish(exchange='', routing_key='email_queue', body=message)
+            channel.basic_publish(exchange='', routing_key='sms_queue', body=message)
+
+            connection.close()
+
             return {
                 "status": "success",
                 "message": "Notification sent successfully",
@@ -242,6 +224,6 @@ async def callback(request: TransactionRequest):
         raise HTTPException(status_code=500, detail="Failed to retrieve the transactions")
 
 # To run in development mode, use the command:
-# `fastapi dev`
+# `uvicorn main:app --reload`
 # For production, you can use a command like:
-# `fastapi run --host 0.0.0.0 --port 8000`
+# `uvicorn main:app --host 0.0.0.0 --port 8000`

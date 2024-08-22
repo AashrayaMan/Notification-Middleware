@@ -1,61 +1,69 @@
 import pika
-import uuid
-import logging
+import json
+import threading
+import subprocess
 import sys
-from email_sender import email_alert
+import os
+import logging
+from email_sender import email_alert, sms_alert
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Configure logging for Pika
-logging.getLogger("pika").setLevel(logging.WARNING)
-
-# Get transaction details from command-line arguments
-merchant_id = sys.argv[1]
-amount = sys.argv[2]
-mobile_number = sys.argv[3]
-email = sys.argv[4]
-commission = sys.argv[5]
-
-connection_parameters = pika.ConnectionParameters('localhost')
-connection = pika.BlockingConnection(connection_parameters)
-channel = connection.channel()
-
-reply_queue = channel.queue_declare(queue=f'merchant-id:{merchant_id}', auto_delete=True)
-reply_queue_name = reply_queue.method.queue
-
-def on_reply_message_received(ch, method, properties, body):
+def process_koili_ipn(ch, method, properties, body):
     try:
-        logger.info(f"Reply received for {merchant_id}: {body}")
-        # Send email confirmation
-        email_subject = f"Payment Confirmation - {merchant_id}"
+        data = json.loads(body)
+        script_path = os.path.join(os.path.dirname(__file__), 'koili_ipn.py')
+        subprocess.Popen([sys.executable, script_path, str(data['amount'])])
+        logger.info(f"Processed koili_ipn for amount: {data['amount']}")
+    except Exception as e:
+        logger.error(f"Error processing koili_ipn: {str(e)}")
+    finally:
+        ch.basic_ack(delivery_tag=method.delivery_tag)
+
+def process_email(ch, method, properties, body):
+    try:
+        data = json.loads(body)
+        email_subject = f"Payment Confirmation - {data['merchantId']}"
         email_body = f"""
         Dear Merchant,
 
-        A payment of Rs{amount} has been received from {mobile_number}.
-        Commission: Rs{commission}
+        A payment of Rs{data['amount']} has been received from {data['mobileNumber']}.
+        Commission: Rs{data['commission']}
 
         Thank you for using our payment system.
         """
-        email_alert(email_subject, email_body, {email})
+        email_alert(email_subject, email_body, data['email'])
+        logger.info(f"Processed email for merchant: {data['merchantId']}")
+    except Exception as e:
+        logger.error(f"Error processing email: {str(e)}")
     finally:
-        channel.stop_consuming()        
+        ch.basic_ack(delivery_tag=method.delivery_tag)
 
-channel.basic_consume(queue=reply_queue_name, auto_ack=True,
-        on_message_callback=on_reply_message_received)
+def process_sms(ch, method, properties, body):
+    try:
+        data = json.loads(body)
+        sms_body = f"Payment of Rs{data['amount']} received for merchant {data['merchantId']}"
+        sms_alert(sms_body, data['mobileNumber'])
+        logger.info(f"Processed SMS for mobile: {data['mobileNumber']}")
+    except Exception as e:
+        logger.error(f"Error processing SMS: {str(e)}")
+    finally:
+        ch.basic_ack(delivery_tag=method.delivery_tag)
 
-channel.queue_declare(queue='request-queue')
+def start_consumer(queue_name, callback):
+    connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
+    channel = connection.channel()
+    channel.queue_declare(queue=queue_name)
+    channel.basic_consume(queue=queue_name, on_message_callback=callback)
+    logger.info(f"Started consuming from {queue_name}")
+    channel.start_consuming()
 
-message =f'Transaction: Merchant ID: {merchant_id}, Amount: {amount}, Mobile: {mobile_number}, Commission: {commission}'
+if __name__ == "__main__":
+    # Start threads for each queue
+    threading.Thread(target=start_consumer, args=('koili_ipn_queue', process_koili_ipn)).start()
+    threading.Thread(target=start_consumer, args=('email_queue', process_email)).start()
+    threading.Thread(target=start_consumer, args=('sms_queue', process_sms)).start()
 
-cor_id = str(uuid.uuid4())
-logger.info(f"Sending Request for {merchant_id}: {cor_id}")
-
-channel.basic_publish('', routing_key='request-queue', properties=pika.BasicProperties(
-        reply_to=reply_queue_name,
-        correlation_id=cor_id
-    ), body=message)
-
-channel.start_consuming()
-connection.close()
+    logger.info("All consumers started. Waiting for messages.")

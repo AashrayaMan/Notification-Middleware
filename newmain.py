@@ -7,7 +7,6 @@ import base64
 import uuid
 import logging
 from requests.exceptions import RequestException
-import subprocess
 import sys
 import os
 from fastapi import FastAPI, HTTPException
@@ -15,6 +14,7 @@ from fastapi.responses import JSONResponse
 from typing import Optional
 import re
 from dotenv import load_dotenv
+import pika
 
 load_dotenv()
 
@@ -22,42 +22,6 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 app = FastAPI(root_path="/api/v1")
-
-def run_client_script(transaction_details):
-    script_path = os.path.join(os.path.dirname(__file__), 'receiver.py')
-    
-    properties = transaction_details.get('properties', {})
-    
-    args = [
-        sys.executable,
-        script_path,
-        transaction_details['merchantId'],
-        transaction_details['amount'],
-        transaction_details['mobileNumber'],
-        properties.get('email', ''),
-        properties.get('commission', '')
-    ]
-    
-    try:
-        subprocess.Popen(args)
-        logger.info(f"Launched client.py for transaction: {transaction_details['uniqueId']}")
-    except Exception as e:
-        logger.error(f"Error launching client script: {str(e)}")
-
-def run_koili_ipn(amount):
-    script_path = os.path.join(os.path.dirname(__file__), 'koili_ipn.py')
-    
-    args = [
-        sys.executable,
-        script_path,
-        str(amount)
-    ]
-    
-    try:
-        subprocess.Popen(args)
-        logger.info(f"Launched koili_ipn.py with amount: {amount}")
-    except Exception as e:
-        logger.error(f"Error launching koili_ipn script: {str(e)}")
 
 class FonepayNotificationAPI:
     def __init__(self, base_url, api_key, api_secret):
@@ -71,41 +35,54 @@ class FonepayNotificationAPI:
         return base64.b64encode(hmac_obj.digest()).decode()
 
     def send_notification(self, payload):
-        # Return the same response as the mock server
-        return {
-            "status": True,
-            "message": "SMS delivered successfully",
-            "code": "0",
-            "data": {
-                "mobileNumber": payload["mobileNumber"],
-                "msgId": "MN-1553144161875"
-            },
-            "httpStatus": 200
+        url = f"{self.base_url}/notification/send"
+        
+        body = json.dumps(payload, separators=(',', ':'))
+        nonce = str(uuid.uuid4())
+        signature = self.generate_signature(nonce, body)
+        
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': f'HmacSHA512 {self.api_key}:{nonce}:{signature}'
         }
+        
+        try:
+            response = requests.post(url, data=body, headers=headers, timeout=10)
+            response.raise_for_status()
+            logger.info(f"Send Notification Status Code: {response.status_code}")
+            logger.info(f"Send Notification Response: {response.text}")
+            
+            return response.json()
+        except RequestException as e:
+            logger.error(f"An error occurred while sending notification: {e}")
+            return None
 
     def get_last_5_transactions(self, merchant_id, terminal_id):
-        return {
-            "transactionNotificationDetails": [
-                {
-                    "mobileNumber": "98xxxxxxxx",
-                    "remark1": "Message to send",
-                    "retrievalReferenceNumber": "701125454",
-                    "amount": "400",
-                    "merchantId": "99XXXXXXXXXX",
-                    "terminalId": "222202XXXXXXXXXX",
-                    "type": "alert",
-                    "uniqueId": "202307201141001",
-                    "properties": {
-                        "txnDate": "2023-07-22 01:00:10",
-                        "secondaryMobileNumber": "98xxxxxxxx",
-                        "email": "random@gmail.com",
-                        "sessionSrlNo": "69",
-                        "commission": "10.00",
-                        "initiator": "98xxxxxxxx"
-                    }
-                }
-            ]
+        url = f"{self.base_url}/callback"
+        
+        payload = {
+            "merchantId": merchant_id,
+            "terminalId": terminal_id
         }
+        
+        body = json.dumps(payload, separators=(',', ':'))
+        nonce = str(uuid.uuid4())
+        signature = self.generate_signature(nonce, body)
+        
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': f'HmacSHA512 {self.api_key}:{nonce}:{signature}'
+        }
+        
+        try:
+            response = requests.post(url, json=payload, headers=headers, timeout=10)
+            response.raise_for_status()
+            logger.info(f"Callback Status Code: {response.status_code}")
+            logger.info(f"Callback Response: {response.text}")
+            return response.json()
+        except RequestException as e:
+            logger.error(f"An error occurred while getting transactions: {e}")
+            return None
 
 # Initialize API
 base_url = os.getenv('FONEPAY_API_URL')
@@ -187,14 +164,36 @@ async def send_notification(payload: NotificationPayload):
         if notification_response:
             logger.info(f"Notification sent successfully: {notification_response}")
             
-            # Run koili_ipn.py with the amount from the transaction details
-            amount = payload.amount
-            run_koili_ipn(amount)
-            
-            # Run the client script
-            run_client_script(payload.model_dump())
-            
-            return notification_response
+            # Publish messages to queues
+            connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
+            channel = connection.channel()
+
+            # Declare queues
+            channel.queue_declare(queue='koili_ipn_queue')
+            channel.queue_declare(queue='email_queue')
+            channel.queue_declare(queue='sms_queue')
+
+            # Prepare message
+            message = json.dumps({
+                'amount': payload.amount,
+                'mobileNumber': payload.mobileNumber,
+                'email': payload.properties.email if payload.properties else None,
+                'merchantId': payload.merchantId,
+                'commission': payload.properties.commission if payload.properties else None
+            })
+
+            # Publish to queues
+            channel.basic_publish(exchange='', routing_key='koili_ipn_queue', body=message)
+            channel.basic_publish(exchange='', routing_key='email_queue', body=message)
+            channel.basic_publish(exchange='', routing_key='sms_queue', body=message)
+
+            connection.close()
+
+            return {
+                "status": "success",
+                "message": "Notification sent successfully",
+                "response": notification_response
+            }
         else:
             logger.error("Failed to send notification")
             raise HTTPException(status_code=500, detail="Failed to send notification")
@@ -214,12 +213,17 @@ async def callback(request: TransactionRequest):
     transactions_response = api.get_last_5_transactions(request.merchantId, request.terminalId)
     if transactions_response:
         logger.info(f"Transactions retrieved successfully: {transactions_response}")
-        return transactions_response
+        return {
+            "status": "success",
+            "message": "Transactions retrieved successfully",
+            "full_response": transactions_response,
+            "transaction_details": transactions_response.get('transactionNotificationDetails', [])
+        }
     else:
         logger.error("Failed to retrieve transactions")
         raise HTTPException(status_code=500, detail="Failed to retrieve the transactions")
 
 # To run in development mode, use the command:
-# `fastapi dev`
+# `uvicorn main:app --reload`
 # For production, you can use a command like:
-# `fastapi run --host 0.0.0.0 --port 8000`
+# `uvicorn main:app --host 0.0.0.0 --port 8000`
