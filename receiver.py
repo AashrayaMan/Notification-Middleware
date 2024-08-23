@@ -11,16 +11,38 @@ from email_sender import email_alert, sms_alert
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+def publish_message(queue_name, message):
+    connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
+    channel = connection.channel()
+    channel.queue_declare(queue=queue_name)
+    channel.basic_publish(exchange='', routing_key=queue_name, body=message)
+    connection.close()
+    logger.info(f"Published message to {queue_name}")
+
 def process_koili_ipn(ch, method, properties, body):
     try:
         data = json.loads(body)
         script_path = os.path.join(os.path.dirname(__file__), 'koili_ipn.py')
-        subprocess.Popen([sys.executable, script_path, str(data['amount'])])
+        
+        # Run the subprocess and wait for it to complete
+        result = subprocess.run([sys.executable, script_path, str(data['amount'])], 
+                                capture_output=True, text=True, check=True)
+        
+        # Log the output of the script
+        logger.info(f"koili_ipn.py output: {result.stdout}")
         logger.info(f"Processed koili_ipn for amount: {data['amount']}")
+        
+        # Acknowledge the message only after successful processing
+        ch.basic_ack(delivery_tag=method.delivery_tag)
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Error executing koili_ipn.py: {e}")
+        logger.error(f"koili_ipn.py stderr: {e.stderr}")
+        # Negative acknowledge the message to requeue it
+        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
     except Exception as e:
         logger.error(f"Error processing koili_ipn: {str(e)}")
-    finally:
-        ch.basic_ack(delivery_tag=method.delivery_tag)
+        # Negative acknowledge the message to requeue it
+        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
 
 def process_email(ch, method, properties, body):
     try:
@@ -30,7 +52,7 @@ def process_email(ch, method, properties, body):
         Dear Merchant,
 
         A payment of Rs{data['amount']} has been received from {data['mobileNumber']}.
-        Commission: Rs{data['commission']}
+        Commission: Rs{data.get('commission', 'N/A')}
 
         Thank you for using our payment system.
         """
@@ -61,6 +83,16 @@ def start_consumer(queue_name, callback):
     channel.start_consuming()
 
 if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        message = sys.argv[1]
+        data = json.loads(message)
+        
+        # Publish messages to queues
+        publish_message('koili_ipn_queue', message)
+        if data.get('email'):
+            publish_message('email_queue', message)
+        publish_message('sms_queue', message)
+    
     # Start threads for each queue
     threading.Thread(target=start_consumer, args=('koili_ipn_queue', process_koili_ipn)).start()
     threading.Thread(target=start_consumer, args=('email_queue', process_email)).start()

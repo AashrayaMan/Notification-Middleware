@@ -1,229 +1,169 @@
-from pydantic import BaseModel, Field, EmailStr, field_validator
-import requests
-import json
+from fastapi import FastAPI, HTTPException, Depends, Header, Request
+from pydantic import BaseModel
+from typing import List, Optional
+from datetime import datetime
 import hmac
 import hashlib
 import base64
-import uuid
 import logging
-from requests.exceptions import RequestException
+import json
+import subprocess
 import sys
 import os
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
-from typing import Optional
-import re
 from dotenv import load_dotenv
-import pika
 
 load_dotenv()
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# Set up logging
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(root_path="/api/v1")
+app = FastAPI()
 
-class FonepayNotificationAPI:
-    def __init__(self, base_url, api_key, api_secret):
-        self.base_url = base_url
-        self.api_key = api_key
-        self.api_secret = api_secret
-
-    def generate_signature(self, nonce, body):
-        signature_data = f" {self.api_key} {nonce} {body} "
-        hmac_obj = hmac.new(self.api_secret.encode(), signature_data.encode(), hashlib.sha512)
-        return base64.b64encode(hmac_obj.digest()).decode()
-
-    def send_notification(self, payload):
-        url = f"{self.base_url}/notification/send"
-        
-        body = json.dumps(payload, separators=(',', ':'))
-        nonce = str(uuid.uuid4())
-        signature = self.generate_signature(nonce, body)
-        
-        headers = {
-            'Content-Type': 'application/json',
-            'Authorization': f'HmacSHA512 {self.api_key}:{nonce}:{signature}'
-        }
-        
-        try:
-            response = requests.post(url, data=body, headers=headers, timeout=10)
-            response.raise_for_status()
-            logger.info(f"Send Notification Status Code: {response.status_code}")
-            logger.info(f"Send Notification Response: {response.text}")
-            
-            return response.json()
-        except RequestException as e:
-            logger.error(f"An error occurred while sending notification: {e}")
-            return None
-
-    def get_last_5_transactions(self, merchant_id, terminal_id):
-        url = f"{self.base_url}/callback"
-        
-        payload = {
-            "merchantId": merchant_id,
-            "terminalId": terminal_id
-        }
-        
-        body = json.dumps(payload, separators=(',', ':'))
-        nonce = str(uuid.uuid4())
-        signature = self.generate_signature(nonce, body)
-        
-        headers = {
-            'Content-Type': 'application/json',
-            'Authorization': f'HmacSHA512 {self.api_key}:{nonce}:{signature}'
-        }
-        
-        try:
-            response = requests.post(url, json=payload, headers=headers, timeout=10)
-            response.raise_for_status()
-            logger.info(f"Callback Status Code: {response.status_code}")
-            logger.info(f"Callback Response: {response.text}")
-            return response.json()
-        except RequestException as e:
-            logger.error(f"An error occurred while getting transactions: {e}")
-            return None
-
-# Initialize API
-base_url = os.getenv('FONEPAY_API_URL')
-api_key = os.getenv('FONEPAY_API_KEY')
-api_secret = os.getenv('FONEPAY_API_SECRET')
-
-api = FonepayNotificationAPI(base_url, api_key, api_secret)
+# Simulated API key and secret (replace with secure storage in production)
+API_KEY = os.getenv('FONEPAY_API_KEY')
+API_SECRET = os.getenv('FONEPAY_API_SECRET')
 
 class Properties(BaseModel):
+    commission: Optional[str] = None
+    sessionSrlNo: Optional[str] = None
     txnDate: Optional[str] = None
     secondaryMobileNumber: Optional[str] = None
-    email: Optional[EmailStr] = None
-    sessionSrlNo: Optional[str] = None
-    commission: Optional[str] = None
+    email: Optional[str] = None
     initiator: Optional[str] = None
 
-    @field_validator('secondaryMobileNumber')
-    @classmethod
-    def validate_secondary_mobile_number(cls, v):
-        if v and not re.match(r'^\d{10}$', v):
-            raise ValueError('secondaryMobileNumber must be a 10-digit number')
-        return v
-
-    @field_validator('commission')
-    @classmethod
-    def validate_commission(cls, v):
-        if v is not None:
-            if not isinstance(v, str):
-                raise ValueError('commission must be a string')
-            try:
-                float_value = float(v)
-                if float_value < 0:
-                    raise ValueError('commission must be a non-negative number')
-            except ValueError:
-                raise ValueError('commission must be a valid number string')
-        return v
-
-class NotificationPayload(BaseModel):
-    mobileNumber: str = Field(..., min_length=10, max_length=10)
-    remark1: str = Field(..., min_length=1)
-    retrievalReferenceNumber: str = Field(..., min_length=1)
-    amount: str = Field(..., min_length=1)
-    merchantId: str = Field(..., min_length=1)
-    terminalId: str = Field(..., min_length=1)
-    uniqueId: str = Field(..., min_length=1)
-    type: Optional[str] = Field(None, pattern='^(otp|alert)$')
+class SendNotificationRequest(BaseModel):
+    mobileNumber: str
+    merchantId: str
+    terminalId: str
+    retrievalReferenceNumber: str
+    amount: str
+    remark1: str
+    type: Optional[str] = None
+    uniqueId: str
     properties: Optional[Properties] = None
 
-    @field_validator('mobileNumber')
-    @classmethod
-    def validate_mobile_number(cls, v):
-        if not v.isdigit():
-            raise ValueError('mobileNumber must contain only digits')
-        return v
+class SendNotificationResponse(BaseModel):
+    status: bool
+    message: str
+    code: str
+    data: dict
+    httpStatus: int
 
-    @field_validator('amount')
-    @classmethod
-    def validate_amount(cls, v):
-        if not isinstance(v, str):
-            raise ValueError('amount must be a string')
-        try:
-            float_value = float(v)
-            if float_value <= 0:
-                raise ValueError('amount must be a positive number')
-        except ValueError:
-            raise ValueError('amount must be a valid number string')
-        return v
-
-class TransactionRequest(BaseModel):
+class CallbackRequest(BaseModel):
     merchantId: str
     terminalId: str
 
-@app.post("/notification/send")
-async def send_notification(payload: NotificationPayload):
+class TransactionNotificationDetail(BaseModel):
+    mobileNumber: str
+    merchantId: str
+    terminalId: str
+    retrievalReferenceNumber: str
+    amount: str
+    remark1: str
+    type: Optional[str] = None
+    uniqueId: str
+    properties: Optional[Properties] = None
+
+class CallbackResponse(BaseModel):
+    transactionNotificationDetails: List[TransactionNotificationDetail]
+
+async def verify_hmac(request: Request, authorization: str = Header(...)):
+    logger.debug(f"Received authorization header: {authorization}")
     try:
-        logger.info("Received payload")
-        notification_response = api.send_notification(payload.model_dump())
+        auth_type, auth_data = authorization.split(" ", 1)
+        if auth_type != "HmacSHA512":
+            raise HTTPException(status_code=403, detail="Invalid authorization type")
+
+        api_key, nonce, signature = auth_data.split(":")
+        logger.debug(f"Parsed auth data - API Key: {api_key}, Nonce: {nonce}")
         
-        if notification_response:
-            logger.info(f"Notification sent successfully: {notification_response}")
-            
-            # Publish messages to queues
-            connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
-            channel = connection.channel()
+        if api_key != API_KEY:
+            raise HTTPException(status_code=403, detail="Invalid API key")
 
-            # Declare queues
-            channel.queue_declare(queue='koili_ipn_queue')
-            channel.queue_declare(queue='email_queue')
-            channel.queue_declare(queue='sms_queue')
+        # In a real implementation, you would validate the nonce here
 
-            # Prepare message
-            message = json.dumps({
-                'amount': payload.amount,
-                'mobileNumber': payload.mobileNumber,
-                'email': payload.properties.email if payload.properties else None,
-                'merchantId': payload.merchantId,
-                'commission': payload.properties.commission if payload.properties else None
-            })
+        # Get the request body
+        body = await request.body()
+        body_str = body.decode()
+        logger.debug(f"Request body: {body_str}")
 
-            # Publish to queues
-            channel.basic_publish(exchange='', routing_key='koili_ipn_queue', body=message)
-            channel.basic_publish(exchange='', routing_key='email_queue', body=message)
-            channel.basic_publish(exchange='', routing_key='sms_queue', body=message)
+        # Verify the signature
+        message = f" {API_KEY} {nonce} {body_str} "
+        expected_signature = base64.b64encode(
+            hmac.new(API_SECRET.encode(), message.encode(), hashlib.sha512).digest()
+        ).decode()
+        
+        logger.debug(f"Expected signature: {expected_signature}")
+        logger.debug(f"Received signature: {signature}")
 
-            connection.close()
+        if signature != expected_signature:
+            raise HTTPException(status_code=403, detail="Invalid signature")
 
-            return {
-                "status": "success",
-                "message": "Notification sent successfully",
-                "response": notification_response
-            }
-        else:
-            logger.error("Failed to send notification")
-            raise HTTPException(status_code=500, detail="Failed to send notification")
-    
-    except HTTPException as he:
-        logger.error(f"HTTPException: {str(he)}")
-        raise he
-    except ValueError as ve:
-        logger.error(f"ValueError: {str(ve)}")
-        raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
-        logger.error(f"An unexpected error occurred: {str(e)}")
-        raise HTTPException(status_code=500, detail="An unexpected error occurred")
+        logger.error(f"Authentication error: {str(e)}")
+        raise HTTPException(status_code=403, detail="Invalid authorization data")
 
-@app.post("/callback")
-async def callback(request: TransactionRequest):
-    transactions_response = api.get_last_5_transactions(request.merchantId, request.terminalId)
-    if transactions_response:
-        logger.info(f"Transactions retrieved successfully: {transactions_response}")
-        return {
-            "status": "success",
-            "message": "Transactions retrieved successfully",
-            "full_response": transactions_response,
-            "transaction_details": transactions_response.get('transactionNotificationDetails', [])
-        }
-    else:
-        logger.error("Failed to retrieve transactions")
-        raise HTTPException(status_code=500, detail="Failed to retrieve the transactions")
+@app.post("/notification/send", response_model=SendNotificationResponse)
+async def send_notification(request: SendNotificationRequest, authorized: bool = Depends(verify_hmac)):
+    logger.info(f"Received notification request for mobile number: {request.mobileNumber}")
+    # Implement your notification sending logic here
+    # This is a mock response
+    response = SendNotificationResponse(
+        status=True,
+        message="SMS delivered successfully",
+        code="0",
+        data={
+            "mobileNumber": request.mobileNumber,
+            "msgId": f"MN-{int(datetime.now().timestamp())}"
+        },
+        httpStatus=200
+    )
 
-# To run in development mode, use the command:
-# `uvicorn main:app --reload`
-# For production, you can use a command like:
-# `uvicorn main:app --host 0.0.0.0 --port 8000`
+    # If the notification was successful, call receiver.py
+    if response.status:
+        receiver_script = os.path.join(os.path.dirname(__file__), 'receiver.py')
+        message = json.dumps({
+            'amount': request.amount,
+            'mobileNumber': request.mobileNumber,
+            'email': request.properties.email if request.properties else None,
+            'merchantId': request.merchantId,
+            'commission': request.properties.commission if request.properties else None
+        })
+        subprocess.Popen([sys.executable, receiver_script, message])
+        logger.info(f"Called receiver.py with message: {message}")
+
+    return response
+
+@app.post("/callback", response_model=CallbackResponse)
+async def callback(request: CallbackRequest, authorized: bool = Depends(verify_hmac)):
+    logger.info(f"Received callback request for merchant: {request.merchantId}")
+    # Implement your logic to fetch last 5 transactions here
+    # This is a mock response
+    mock_transaction = TransactionNotificationDetail(
+        mobileNumber="98xxxxxxxx",
+        merchantId=request.merchantId,
+        terminalId=request.terminalId,
+        retrievalReferenceNumber="701125454",
+        amount="400",
+        remark1="Message to send",
+        type="alert",
+        uniqueId="202307201141001",
+        properties=Properties(
+            txnDate="2023-07-22 01:00:10",
+            secondaryMobileNumber="9012325645",
+            email="cn@fpay.com",
+            sessionSrlNo="69",
+            commission="10.00",
+            initiator="98xxxxxxxx"
+        )
+    )
+    return CallbackResponse(transactionNotificationDetails=[mock_transaction] * 5)
+
+@app.get("/")
+async def root():
+    return {"message": "Notification API for Acquirers is running"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -49,16 +49,20 @@ def run_koili_ipn(amount):
 
 def process_messages(queue_name, messages):
     logger.info(f"Processing {len(messages)} messages from {queue_name}")
-    for _, body in messages:
+    for method, body in messages:
         try:
-            data = json.loads(body)
+            # Decode the message body from bytes to string
+            message_str = body.decode('utf-8')
+            logger.info(f"Raw message from {queue_name}: {message_str}")
+            
+            data = json.loads(message_str)
+            logger.info(f"Processed JSON from {queue_name}: {data}")
+            
             if queue_name == 'koili_ipn_queue':
-                # Process koili_ipn message
-                amount = data['amount']
-                run_koili_ipn(amount)
-                logger.info(f"Processed koili_ipn for amount: {amount}")
+                logger.info(f"Attempting to process koili_ipn for amount: {data['amount']}")
+                run_koili_ipn(data['amount'])
+                logger.info(f"Finished processing koili_ipn for amount: {data['amount']}")
             elif queue_name == 'email_queue':
-                # Process email message
                 subject = f"Payment Confirmation - {data['merchantId']}"
                 body = f"""
                 Dear Merchant,
@@ -71,12 +75,18 @@ def process_messages(queue_name, messages):
                 email_alert(subject, body, data['email'])
                 logger.info(f"Sent email for merchant: {data['merchantId']}")
             elif queue_name == 'sms_queue':
-                # Process SMS message
                 sms_body = f"Payment of Rs{data['amount']} received for merchant {data['merchantId']}"
                 sms_alert(sms_body, data['mobileNumber'])
                 logger.info(f"Sent SMS to mobile: {data['mobileNumber']}")
+        except json.JSONDecodeError as e:
+            logger.error(f"Error decoding JSON from {queue_name}: {str(e)}")
+            logger.error(f"Raw message: {message_str}")
+        except KeyError as e:
+            logger.error(f"Missing key in message from {queue_name}: {str(e)}")
+            logger.error(f"Message content: {data}")
         except Exception as e:
             logger.error(f"Error processing message from {queue_name}: {str(e)}")
+            logger.error(f"Raw message: {body}")
 
 def process_batch(channel, queue_name):
     global message_batches
