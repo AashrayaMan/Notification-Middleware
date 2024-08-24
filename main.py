@@ -15,12 +15,12 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Set up logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.ERROR)
 logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
-# Simulated API key and secret (replace with secure storage in production)
+# Load API credentials from environment variables
 API_KEY = os.getenv('FONEPAY_API_KEY')
 API_SECRET = os.getenv('FONEPAY_API_SECRET')
 
@@ -68,6 +68,13 @@ class TransactionNotificationDetail(BaseModel):
 class CallbackResponse(BaseModel):
     transactionNotificationDetails: List[TransactionNotificationDetail]
 
+def generate_signature(api_key: str, api_secret: str, nonce: str, body: str) -> str:
+    message = f" {api_key} {nonce} {body} "
+    signature = base64.b64encode(
+        hmac.new(api_secret.encode(), message.encode(), hashlib.sha512).digest()
+    ).decode()
+    return signature
+
 async def verify_hmac(request: Request, authorization: str = Header(...)):
     logger.debug(f"Received authorization header: {authorization}")
     try:
@@ -81,18 +88,13 @@ async def verify_hmac(request: Request, authorization: str = Header(...)):
         if api_key != API_KEY:
             raise HTTPException(status_code=403, detail="Invalid API key")
 
-        # In a real implementation, you would validate the nonce here
-
         # Get the request body
         body = await request.body()
         body_str = body.decode()
         logger.debug(f"Request body: {body_str}")
 
         # Verify the signature
-        message = f" {API_KEY} {nonce} {body_str} "
-        expected_signature = base64.b64encode(
-            hmac.new(API_SECRET.encode(), message.encode(), hashlib.sha512).digest()
-        ).decode()
+        expected_signature = generate_signature(API_KEY, API_SECRET, nonce, body_str)
         
         logger.debug(f"Expected signature: {expected_signature}")
         logger.debug(f"Received signature: {signature}")
@@ -107,8 +109,7 @@ async def verify_hmac(request: Request, authorization: str = Header(...)):
 @app.post("/notification/send", response_model=SendNotificationResponse)
 async def send_notification(request: SendNotificationRequest, authorized: bool = Depends(verify_hmac)):
     logger.info(f"Received notification request for mobile number: {request.mobileNumber}")
-    # Implement your notification sending logic here
-    # This is a mock response
+
     response = SendNotificationResponse(
         status=True,
         message="SMS delivered successfully",
@@ -130,7 +131,9 @@ async def send_notification(request: SendNotificationRequest, authorized: bool =
             'merchantId': request.merchantId,
             'commission': request.properties.commission if request.properties else None
         })
-        subprocess.Popen([sys.executable, receiver_script, message])
+        subprocess.Popen([sys.executable, receiver_script, message], 
+                 stdout=subprocess.DEVNULL, 
+                 stderr=subprocess.DEVNULL)
         logger.info(f"Called receiver.py with message: {message}")
 
     return response
@@ -138,8 +141,6 @@ async def send_notification(request: SendNotificationRequest, authorized: bool =
 @app.post("/callback", response_model=CallbackResponse)
 async def callback(request: CallbackRequest, authorized: bool = Depends(verify_hmac)):
     logger.info(f"Received callback request for merchant: {request.merchantId}")
-    # Implement your logic to fetch last 5 transactions here
-    # This is a mock response
     mock_transaction = TransactionNotificationDetail(
         mobileNumber="98xxxxxxxx",
         merchantId=request.merchantId,

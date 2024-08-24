@@ -9,7 +9,7 @@ import os
 from email_sender import email_alert, sms_alert
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 # Set Pika logger to WARNING to reduce noise
@@ -53,10 +53,10 @@ def process_messages(queue_name, messages):
         try:
             # Decode the message body from bytes to string
             message_str = body.decode('utf-8')
-            logger.info(f"Raw message from {queue_name}: {message_str}")
+            # logger.info(f"Raw message from {queue_name}: {message_str}")
             
             data = json.loads(message_str)
-            logger.info(f"Processed JSON from {queue_name}: {data}")
+            # logger.info(f"Processed JSON from {queue_name}: {data}")
             
             if queue_name == 'koili_ipn_queue':
                 logger.info(f"Attempting to process koili_ipn for amount: {data['amount']}")

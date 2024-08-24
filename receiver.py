@@ -8,7 +8,7 @@ import logging
 from email_sender import email_alert, sms_alert
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 def publish_message(queue_name, message):
@@ -22,7 +22,7 @@ def publish_message(queue_name, message):
 def process_koili_ipn(ch, method, properties, body):
     try:
         data = json.loads(body)
-        script_path = os.path.join(os.path.dirname(__file__), 'koili_ipn.py')
+        script_path = os.path.abspath('koili_ipn.py')
         
         # Run the subprocess and wait for it to complete
         result = subprocess.run([sys.executable, script_path, str(data['amount'])], 
@@ -37,10 +37,6 @@ def process_koili_ipn(ch, method, properties, body):
     except subprocess.CalledProcessError as e:
         logger.error(f"Error executing koili_ipn.py: {e}")
         logger.error(f"koili_ipn.py stderr: {e.stderr}")
-        # Negative acknowledge the message to requeue it
-        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
-    except Exception as e:
-        logger.error(f"Error processing koili_ipn: {str(e)}")
         # Negative acknowledge the message to requeue it
         ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
 
