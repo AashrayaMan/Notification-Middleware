@@ -7,16 +7,16 @@ import hashlib
 import base64
 import logging
 import json
-import subprocess
-import sys
 import os
 from dotenv import load_dotenv
 import email_validator
+from service_check import get_device_data, check_enabled_services
+from email_sender import email_alert
 
 load_dotenv()
 
 # Set up logging
-logging.basicConfig(level=logging.ERROR)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI()
@@ -102,24 +102,6 @@ class SendNotificationResponse(BaseModel):
     data: dict
     httpStatus: int
 
-class CallbackRequest(BaseModel):
-    merchantId: str
-    terminalId: str
-
-class TransactionNotificationDetail(BaseModel):
-    mobileNumber: str
-    merchantId: str
-    terminalId: str
-    retrievalReferenceNumber: str
-    amount: str
-    remark1: str
-    type: Optional[str] = None
-    uniqueId: str
-    properties: Optional[Properties] = None
-
-class CallbackResponse(BaseModel):
-    transactionNotificationDetails: List[TransactionNotificationDetail]
-
 def generate_signature(api_key: str, api_secret: str, nonce: str, body: str) -> str:
     message = f" {api_key} {nonce} {body} "
     signature = base64.b64encode(
@@ -140,12 +122,10 @@ async def verify_hmac(request: Request, authorization: str = Header(...)):
         if api_key != API_KEY:
             raise HTTPException(status_code=403, detail="Invalid API key")
 
-        # Get the request body
         body = await request.body()
         body_str = body.decode()
         logger.debug(f"Request body: {body_str}")
 
-        # Verify the signature
         expected_signature = generate_signature(API_KEY, API_SECRET, nonce, body_str)
         
         logger.debug(f"Expected signature: {expected_signature}")
@@ -163,12 +143,31 @@ async def send_notification(request: SendNotificationRequest, authorized: bool =
     logger.info(f"Received notification request for mobile number: {request.mobileNumber}")
 
     try:
-        # Pydantic will automatically validate the request based on the model definitions
-        # If any validation fails, it will raise a ValidationError
+        # Check enabled services
+        device_data = get_device_data(request.uniqueId)  # Assuming uniqueId is the device ID
+        if device_data is None:
+            raise HTTPException(status_code=404, detail="Device not found")
+
+        enabled_services = device_data.get('enabledServices', [])
+
+        # Prepare notification content
+        subject = f"Transaction Notification for {request.merchantId}"
+        body = f"Amount: {request.amount}\nMobile: {request.mobileNumber}\nRemark: {request.remark1}"
+
+        # Send email notification if enabled and email is provided
+        if 'EMAIL' in enabled_services and request.properties and request.properties.email:
+            try:
+                email_alert(subject, body, request.properties.email)
+                logger.info(f"Email sent to {request.properties.email}")
+            except Exception as e:
+                logger.error(f"Failed to send email: {str(e)}")
+                raise HTTPException(status_code=500, detail="Failed to send email notification")
+        else:
+            logger.info("Email notification not sent: Either EMAIL service not enabled or email not provided")
 
         response = SendNotificationResponse(
             status=True,
-            message="SMS delivered successfully",
+            message="Notification processed successfully",
             code="0",
             data={
                 "mobileNumber": request.mobileNumber,
@@ -177,50 +176,19 @@ async def send_notification(request: SendNotificationRequest, authorized: bool =
             httpStatus=200
         )
 
-        # If the notification was successful, call receiver.py
-        if response.status:
-            receiver_script = os.path.join(os.path.dirname(__file__), 'receiver.py')
-            message = json.dumps({
-                'amount': request.amount,
-                'mobileNumber': request.mobileNumber,
-                'email': request.properties.email if request.properties else None,
-                'merchantId': request.merchantId,
-                'commission': request.properties.commission if request.properties else None
-            })
-            subprocess.Popen([sys.executable, receiver_script, message], 
-                     stdout=subprocess.DEVNULL, 
-                     stderr=subprocess.DEVNULL)
-            logger.info(f"Called receiver.py with message: {message}")
-
         return response
 
     except ValidationError as e:
         logger.error(f"Validation error: {str(e)}")
         raise HTTPException(status_code=400, detail="Payload Invalid")
-
-@app.post("/callback", response_model=CallbackResponse)
-async def callback(request: CallbackRequest, authorized: bool = Depends(verify_hmac)):
-    logger.info(f"Received callback request for merchant: {request.merchantId}")
-    mock_transaction = TransactionNotificationDetail(
-        mobileNumber="98xxxxxxxx",
-        merchantId=request.merchantId,
-        terminalId=request.terminalId,
-        retrievalReferenceNumber="701125454",
-        amount="400",
-        remark1="Message to send",
-        type="alert",
-        uniqueId="202307201141001",
-        properties=Properties(
-            txnDate="2023-07-22 01:00:10",
-            secondaryMobileNumber="9012325645",
-            email="cn@fpay.com",
-            sessionSrlNo="69",
-            commission="10.00",
-            initiator="98xxxxxxxx"
-        )
-    )
-    return CallbackResponse(transactionNotificationDetails=[mock_transaction] * 5)
+    except Exception as e:
+        logger.error(f"Error processing notification: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
 @app.get("/")
 async def root():
     return {"message": "Notification API for Acquirers is running"}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
