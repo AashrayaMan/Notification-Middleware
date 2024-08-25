@@ -21,7 +21,6 @@ Thumbs.db
 # Application specific
 mock_server.py
 example.py
-script.py
 
 # Dependency directories
 node_modules/
