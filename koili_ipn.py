@@ -16,7 +16,7 @@ url = os.getenv('API_ENDPOINT')
 # Headers
 headers = {
     "Content-Type": "application/json",
-    "Subscription-Key": "36918384da4b491986a08f38b424edd3"
+    "Subscription-Key": os.getenv('Subscription-Key')
 }
 
 def main(amount):
