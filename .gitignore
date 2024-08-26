@@ -22,5 +22,7 @@ Thumbs.db
 mock_server.py
 example.py
 
+
+
 # Dependency directories
 node_modules/

@@ -12,8 +12,13 @@ import sys
 import os
 from dotenv import load_dotenv
 import email_validator
+from pymongo import MongoClient
 
 load_dotenv()
+
+client = MongoClient('mongodb://localhost:27017/')
+db = client['mock_database']
+collection = db['mock_collection']
 
 # Set up logging
 logging.basicConfig(level=logging.ERROR)
@@ -24,6 +29,11 @@ app = FastAPI()
 # Load API credentials from environment variables
 API_KEY = os.getenv('FONEPAY_API_KEY')
 API_SECRET = os.getenv('FONEPAY_API_SECRET')
+
+# MongoDB connection
+client = MongoClient('mongodb://localhost:27017/')
+db = client['mock_database']
+collection = db['mock_collection']
 
 class Properties(BaseModel):
     commission: Optional[float] = None
@@ -158,13 +168,36 @@ async def verify_hmac(request: Request, authorization: str = Header(...)):
         logger.error(f"Authentication error: {str(e)}")
         raise HTTPException(status_code=403, detail="Invalid authorization data")
 
+def get_device_info(merchant_id: str, terminal_id: str):
+    """
+    Connect to MongoDB, check for merchantId and terminalId, 
+    and retrieve enabled services and machine identifier.
+    """
+    device = collection.find_one({
+        "fonepay.merchantId": merchant_id,
+        "fonepay.terminalId": terminal_id
+    })
+    
+    if not device:
+        logger.error(f"No device found for merchantId: {merchant_id} and terminalId: {terminal_id}")
+        return None, []
+    
+    machine_identifier = device.get('machineIdentifier')
+    enabled_services = device.get('enabledServices', [])
+    
+    logger.info(f"Found device: {machine_identifier} with enabled services: {enabled_services}")
+    return machine_identifier, enabled_services
+
 @app.post("/notification/send", response_model=SendNotificationResponse)
 async def send_notification(request: SendNotificationRequest, authorized: bool = Depends(verify_hmac)):
     logger.info(f"Received notification request for mobile number: {request.mobileNumber}")
 
     try:
-        # Pydantic will automatically validate the request based on the model definitions
-        # If any validation fails, it will raise a ValidationError
+        # Get device info
+        machine_identifier, enabled_services = get_device_info(request.merchantId, request.terminalId)
+        
+        if not machine_identifier:
+            raise HTTPException(status_code=404, detail="Device not found")
 
         response = SendNotificationResponse(
             status=True,
@@ -177,16 +210,19 @@ async def send_notification(request: SendNotificationRequest, authorized: bool =
             httpStatus=200
         )
 
-        # If the notification was successful, call receiver.py
         if response.status:
-            receiver_script = os.path.join(os.path.dirname(__file__), 'receiver.py')
             message = json.dumps({
                 'amount': request.amount,
                 'mobileNumber': request.mobileNumber,
                 'email': request.properties.email if request.properties else None,
                 'merchantId': request.merchantId,
-                'commission': request.properties.commission if request.properties else None
+                'terminalId': request.terminalId,
+                'commission': request.properties.commission if request.properties else None,
+                'machineIdentifier': machine_identifier,
+                'enabledServices': enabled_services
             })
+            
+            receiver_script = os.path.join(os.path.dirname(__file__), 'receiver.py')
             subprocess.Popen([sys.executable, receiver_script, message], 
                      stdout=subprocess.DEVNULL, 
                      stderr=subprocess.DEVNULL)
