@@ -7,22 +7,31 @@ collection = db['mock_collection']
 
 # Insert test documents
 test_devices = [
+    
     {
         "fonepay": {
-            "merchantId": "1234567890123456",
-            "terminalId": "12345678901234567",
+            "merchantId": "987654321000987654",
+            "terminalId": "9876543210900876543",
         },
-        "machineIdentifier": "device-1",
-        "enabledServices": ['SMS', 'EMAIL', 'IPN']
+        "machineIdentifier": "c0eceb97-95ee-4000-8559-5376d74e507a",
+        "enabledServices": ['IPN']
     },
-    {
+     {
         "fonepay": {
-            "merchantId": "9876543210987654",
-            "terminalId": "98765432109876543",
+            "merchantId": "9876543210010987654",
+            "terminalId": "98765432109100876543",
         },
-        "machineIdentifier": "device-2",
-        "enabledServices": ['SMS', 'PUSH-NOTIFY']
+        "machineIdentifier": "c0eceb97-95ee-4000-8559-5376d74e507a",
+        "enabledServices": ['EMAIL']
+    }, {
+        "fonepay": {
+            "merchantId": "9876543210030987654",
+            "terminalId": "9876543210900876543",
+        },
+        "machineIdentifier": "c0eceb97-95ee-4000-8559-5376d74e507a",
+        "enabledServices": ['IPN','EMAIL']
     }
+    
 ]
 
 inserted_ids = collection.insert_many(test_devices).inserted_ids
