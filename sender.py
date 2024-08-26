@@ -32,18 +32,18 @@ batch_locks = {
     'sms_queue': threading.Lock()
 }
 
-def run_koili_ipn(amount):
+def run_koili_ipn(amount, machine_identifier):
     script_path = os.path.join(os.path.dirname(__file__), 'koili_ipn.py')
     
     args = [
         sys.executable,
         script_path,
-        str(amount)
+        str(amount),
+        machine_identifier
     ]
     
     try:
         subprocess.Popen(args)
-        logger.info(f"Launched koili_ipn.py with amount: {amount}")
     except Exception as e:
         logger.error(f"Error launching koili_ipn script: {str(e)}")
 
@@ -59,9 +59,9 @@ def process_messages(queue_name, messages):
             # logger.info(f"Processed JSON from {queue_name}: {data}")
             
             if queue_name == 'koili_ipn_queue':
-                logger.info(f"Attempting to process koili_ipn for amount: {data['amount']}")
-                run_koili_ipn(data['amount'])
-                logger.info(f"Finished processing koili_ipn for amount: {data['amount']}")
+                 logger.info(f"Attempting to process koili_ipn for amount: {data['amount']} and machine_identifier: {data['machineIdentifier']}")
+                 run_koili_ipn(data['amount'], data['machineIdentifier'])
+                 logger.info(f"Finished processing koili_ipn for amount: {data['amount']}")
             elif queue_name == 'email_queue':
                 subject = f"Payment Confirmation - {data['merchantId']}"
                 body = f"""

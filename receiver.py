@@ -24,7 +24,7 @@ def process_koili_ipn(ch, method, properties, body):
         data = json.loads(body)
         script_path = os.path.abspath('koili_ipn.py')
         
-        result = subprocess.run([sys.executable, script_path, str(data['amount'])], 
+        result = subprocess.run([sys.executable, script_path, str(data['amount']), str(data['machineIdentifier'])], 
                                 capture_output=True, text=True, check=True)
         
         logger.info(f"koili_ipn.py output: {result.stdout}")

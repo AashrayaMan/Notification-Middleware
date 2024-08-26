@@ -19,11 +19,11 @@ headers = {
     "Subscription-Key": os.getenv('Subscription-Key')
 }
 
-def main(amount):
+def main(amount, machine_identifier):
     # Payload data
     payload = {
         "amount": float(amount),
-        "machineIdentifier": "c0eceb97-95ee-4000-8559-5376d74e507a"
+        "machineIdentifier": machine_identifier
     }
 
     # Make the POST request
@@ -44,9 +44,10 @@ def main(amount):
         logger.error(f"An error occurred: {e}")
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        logger.error("Usage: python koili_ipn.py <amount>")
+    if len(sys.argv) != 3:
+        logger.error("Usage: python koili_ipn.py <amount> <machine_identifier>")
         sys.exit(1)
     
     amount = sys.argv[1]
-    main(amount)
+    machine_identifier = sys.argv[2]
+    main(amount, machine_identifier)
