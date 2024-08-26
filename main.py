@@ -16,9 +16,9 @@ from pymongo import MongoClient
 
 load_dotenv()
 
-client = MongoClient('mongodb://localhost:27017/')
-db = client['mock_database']
-collection = db['mock_collection']
+client = MongoClient(os.getenv('CLIENT_URL'))
+db = client[os.getenv('DB_NAME')]
+collection = db[os.getenv('COLLECTION_NAME')]
 
 # Set up logging
 logging.basicConfig(level=logging.ERROR)
