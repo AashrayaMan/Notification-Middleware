@@ -91,8 +91,7 @@ The system consists of several interconnected components:
 1. FastAPI Server (`main.py`): Handles incoming API requests, interacts with the Fonepay API, and enqueues transactions for processing.
 2. RabbitMQ receiver (`receiver`): Processes transactions asynchronously, sending email and SMS notifications.
 3. RabbitMQ Server (`sender.py`): Consumes messages from the queue and handles responses.
-4. Mock Fonepay Server (`mock_server.py`): Simulates the Fonepay API for testing and development.
-5. Notification Handlers (`email_sender.py`): Manages sending of email and SMS notifications.
+4. Notification Handlers (`email_sender.py`): Manages sending of email and SMS notifications.
 
 ## Usage
 
@@ -100,11 +99,9 @@ The system consists of several interconnected components:
 
 1. Start the RabbitMQ service on your machine or connect to a remote RabbitMQ instance.
 
-2. Start the mock Fonepay server: python mock_server.py
+2. Start the RabbitMQ consumer: python sender.py
 
-3. Start the RabbitMQ consumer: python sender.py
-
-4. Start the main FastAPI server
+3. Start the main FastAPI server
 
 ### API Endpoints
 
@@ -157,17 +154,13 @@ The system consists of several interconnected components:
 - Listens for messages on the RabbitMQ queue
 - Handles message processing and responses
 
-4. `mock_server.py`: Mock Fonepay server
-- Simulates Fonepay API responses
-- Useful for testing and development
-
-5. `email_sender.py`: Notification handler
+4. `email_sender.py`: Notification handler
 - Sends email notifications using SMTP
 - Sends SMS notifications using Twilio
 
 ## Testing
 
-1. Use `example.py` to send test transactions: python example.py
+1. Use Postman to send POST requests with appropriate Payloads to receive responses.
 
 2. Monitor the console output of all running components to track the flow of each transaction.
 
@@ -186,11 +179,3 @@ For production deployment:
 - If you encounter connection issues with RabbitMQ, ensure the service is running and the connection parameters are correct.
 - For API-related issues, check the Fonepay API documentation and ensure your API key and secret are valid.
 - If notifications are not being sent, verify the email and SMS configurations in `email_sender.py`.
-
-## License
-
-License.....
-
-## Contact
-
-Contact.....
