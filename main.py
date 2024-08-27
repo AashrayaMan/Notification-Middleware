@@ -13,12 +13,9 @@ import os
 from dotenv import load_dotenv
 import email_validator
 from pymongo import MongoClient
+from bson import ObjectId
 
 load_dotenv()
-
-client = MongoClient(os.getenv('CLIENT_URL'))
-db = client[os.getenv('DB_NAME')]
-collection = db[os.getenv('COLLECTION_NAME')]
 
 # Set up logging
 logging.basicConfig(level=logging.ERROR)
@@ -31,9 +28,10 @@ API_KEY = os.getenv('FONEPAY_API_KEY')
 API_SECRET = os.getenv('FONEPAY_API_SECRET')
 
 # MongoDB connection
-client = MongoClient('mongodb://localhost:27017/')
-db = client['mock_database']
-collection = db['mock_collection']
+client = MongoClient(os.getenv('CLIENT_URL'))
+db = client[os.getenv('DB_NAME')]
+collection = db[os.getenv('COLLECTION_NAME')]
+transaction_collection = db['transaction_details_DB']
 
 class Properties(BaseModel):
     commission: Optional[float] = None
@@ -199,6 +197,11 @@ async def send_notification(request: SendNotificationRequest, authorized: bool =
         if not machine_identifier:
             raise HTTPException(status_code=404, detail="Device not found")
 
+        # Save transaction details to MongoDB
+        transaction_details = request.dict()
+        transaction_details['timestamp'] = datetime.now()
+        transaction_collection.insert_one(transaction_details)
+
         response = SendNotificationResponse(
             status=True,
             message="SMS delivered successfully",
@@ -237,25 +240,32 @@ async def send_notification(request: SendNotificationRequest, authorized: bool =
 @app.post("/callback", response_model=CallbackResponse)
 async def callback(request: CallbackRequest, authorized: bool = Depends(verify_hmac)):
     logger.info(f"Received callback request for merchant: {request.merchantId}")
-    mock_transaction = TransactionNotificationDetail(
-        mobileNumber="98xxxxxxxx",
-        merchantId=request.merchantId,
-        terminalId=request.terminalId,
-        retrievalReferenceNumber="701125454",
-        amount="400",
-        remark1="Message to send",
-        type="alert",
-        uniqueId="202307201141001",
-        properties=Properties(
-            txnDate="2023-07-22 01:00:10",
-            secondaryMobileNumber="9012325645",
-            email="cn@fpay.com",
-            sessionSrlNo="69",
-            commission="10.00",
-            initiator="98xxxxxxxx"
+    
+    # Retrieve the last 5 transactions from MongoDB
+    transactions = list(transaction_collection.find(
+        {"merchantId": request.merchantId, "terminalId": request.terminalId}
+    ).sort("timestamp", -1).limit(5))
+
+    transaction_details = []
+    for transaction in transactions:
+        # Convert ObjectId to string for serialization
+        transaction['_id'] = str(transaction['_id'])
+        
+        # Create TransactionNotificationDetail object
+        detail = TransactionNotificationDetail(
+            mobileNumber=transaction['mobileNumber'],
+            merchantId=transaction['merchantId'],
+            terminalId=transaction['terminalId'],
+            retrievalReferenceNumber=transaction['retrievalReferenceNumber'],
+            amount=transaction['amount'],
+            remark1=transaction['remark1'],
+            type=transaction.get('type'),
+            uniqueId=transaction['uniqueId'],
+            properties=Properties(**transaction['properties']) if transaction.get('properties') else None
         )
-    )
-    return CallbackResponse(transactionNotificationDetails=[mock_transaction] * 5)
+        transaction_details.append(detail)
+
+    return CallbackResponse(transactionNotificationDetails=transaction_details)
 
 @app.get("/")
 async def root():
