@@ -24,14 +24,13 @@ logger = logging.getLogger(__name__)
 app = FastAPI()
 
 # Load API credentials from environment variables
-API_KEY = os.getenv('FONEPAY_API_KEY')
 API_SECRET = os.getenv('FONEPAY_API_SECRET')
 
 # MongoDB connection
-client = MongoClient(os.getenv('CLIENT_URL'))
-db = client[os.getenv('DB_NAME')]
-collection = db[os.getenv('COLLECTION_NAME')]
-transaction_collection = db['transaction_details_DB']
+Mongodb_URL = MongoClient(os.getenv('DB_URL'))
+db = Mongodb_URL[os.getenv('DB_NAME')]
+collection = db['merchant-registry']
+transaction_collection = db['transaction']
 
 class Properties(BaseModel):
     commission: Optional[float] = None
@@ -128,7 +127,7 @@ class TransactionNotificationDetail(BaseModel):
 class CallbackResponse(BaseModel):
     transactionNotificationDetails: List[TransactionNotificationDetail]
 
-def generate_signature(api_key: str, api_secret: str, nonce: str, body: str) -> str:
+def generate_signature(api_secret: str, nonce: str, api_key: str, body: str) -> str:
     message = f" {api_key} {nonce} {body} "
     signature = base64.b64encode(
         hmac.new(api_secret.encode(), message.encode(), hashlib.sha512).digest()
@@ -144,9 +143,6 @@ async def verify_hmac(request: Request, authorization: str = Header(...)):
 
         api_key, nonce, signature = auth_data.split(":")
         logger.debug(f"Parsed auth data - API Key: {api_key}, Nonce: {nonce}")
-        
-        if api_key != API_KEY:
-            raise HTTPException(status_code=403, detail="Invalid API key")
 
         # Get the request body
         body = await request.body()
@@ -154,7 +150,7 @@ async def verify_hmac(request: Request, authorization: str = Header(...)):
         logger.debug(f"Request body: {body_str}")
 
         # Verify the signature
-        expected_signature = generate_signature(API_KEY, API_SECRET, nonce, body_str)
+        expected_signature = generate_signature(API_SECRET, nonce, api_key, body_str)
         
         logger.debug(f"Expected signature: {expected_signature}")
         logger.debug(f"Received signature: {signature}")

@@ -17,7 +17,7 @@ logging.getLogger("pika").setLevel(logging.WARNING)
 
 # Constants
 BATCH_SIZE = 100
-BATCH_TIMEOUT = 10
+BATCH_TIMEOUT = 5
 
 # Global variables
 message_batches = {
