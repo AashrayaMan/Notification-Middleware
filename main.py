@@ -266,3 +266,5 @@ async def callback(request: CallbackRequest, authorized: bool = Depends(verify_h
 @app.get("/")
 async def root():
     return {"message": "Notification API for Acquirers is running"}
+
+#need to host server
