@@ -7,6 +7,9 @@ import subprocess
 import sys
 import os
 from email_sender import email_alert, sms_alert
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -18,6 +21,13 @@ logging.getLogger("pika").setLevel(logging.WARNING)
 # Constants
 BATCH_SIZE = 100
 BATCH_TIMEOUT = 5
+
+# Remote RabbitMQ Server Configuration
+RABBITMQ_SERVER = os.getenv('RABBITMQ_SERVER')
+RABBITMQ_PORT = os.getenv('RABBITMQ_PORT')
+RABBITMQ_USER = os.getenv('RABBITMQ_USER')
+RABBITMQ_PASS = os.getenv('RABBITMQ_PASS')
+RABBITMQ_VHOST = "/"
 
 # Global variables
 message_batches = {
@@ -51,12 +61,8 @@ def process_messages(queue_name, messages):
     logger.info(f"Processing {len(messages)} messages from {queue_name}")
     for method, body in messages:
         try:
-            # Decode the message body from bytes to string
             message_str = body.decode('utf-8')
-            # logger.info(f"Raw message from {queue_name}: {message_str}")
-            
             data = json.loads(message_str)
-            # logger.info(f"Processed JSON from {queue_name}: {data}")
             
             if queue_name == 'koili_ipn_queue':
                  logger.info(f"Attempting to process koili_ipn for amount: {data['amount']} and machine_identifier: {data['machineIdentifier']}")
@@ -119,11 +125,18 @@ def on_message_received(ch, method, properties, body, queue_name):
 def create_channel():
     while True:
         try:
-            connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
+            credentials = pika.PlainCredentials(RABBITMQ_USER, RABBITMQ_PASS)
+            parameters = pika.ConnectionParameters(
+                host=RABBITMQ_SERVER,
+                port=RABBITMQ_PORT,
+                virtual_host=RABBITMQ_VHOST,
+                credentials=credentials
+            )
+            connection = pika.BlockingConnection(parameters)
             channel = connection.channel()
             return connection, channel
         except pika.exceptions.AMQPConnectionError:
-            logger.error("Failed to connect. Retrying in 5 seconds...")
+            logger.error(f"Failed to connect to {RABBITMQ_SERVER}. Retrying in 5 seconds...")
             time.sleep(5)
 
 def start_consumer(queue_name):
@@ -163,7 +176,7 @@ if __name__ == "__main__":
     for queue_name in message_batches.keys():
         threading.Thread(target=start_consumer, args=(queue_name,), daemon=True).start()
 
-    logger.info("Sender started. Processing messages from all queues.")
+    logger.info(f"Sender started. Processing messages from all queues on {RABBITMQ_SERVER}.")
 
     # Keep the main thread alive
     try:
