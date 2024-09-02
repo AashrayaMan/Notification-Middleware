@@ -139,7 +139,7 @@ async def verify_hmac(request: Request, authorization: str = Header(...)):
     try:
         auth_type, auth_data = authorization.split(" ", 1)
         if auth_type != "HmacSHA512":
-            raise HTTPException(status_code=403, detail="Invalid authorization type")
+            raise HTTPException(status_code=401, detail={"message": "Invalid authorization type", "code": "2"})
 
         api_key, nonce, signature = auth_data.split(":")
         logger.debug(f"Parsed auth data - API Key: {api_key}, Nonce: {nonce}")
@@ -156,11 +156,11 @@ async def verify_hmac(request: Request, authorization: str = Header(...)):
         logger.debug(f"Received signature: {signature}")
 
         if signature != expected_signature:
-            raise HTTPException(status_code=403, detail="Invalid signature")
+            raise HTTPException(status_code=401, detail={"message": "Invalid signature", "code": "2"})
 
     except Exception as e:
         logger.error(f"Authentication error: {str(e)}")
-        raise HTTPException(status_code=403, detail="Invalid authorization data")
+        raise HTTPException(status_code=401, detail={"message": "Invalid authorization data", "code": "2"})
 
 def get_device_info(merchant_id: str, terminal_id: str):
     """
@@ -191,7 +191,7 @@ async def send_notification(request: SendNotificationRequest, authorized: bool =
         machine_identifier, enabled_services = get_device_info(request.merchantId, request.terminalId)
         
         if not machine_identifier:
-            raise HTTPException(status_code=404, detail="Device not found")
+            raise HTTPException(status_code=402, detail={"message": "Device not found", "code": "3"})
 
         # Save transaction details to MongoDB
         transaction_details = request.dict()
@@ -231,11 +231,21 @@ async def send_notification(request: SendNotificationRequest, authorized: bool =
 
     except ValidationError as e:
         logger.error(f"Validation error: {str(e)}")
-        raise HTTPException(status_code=400, detail="Payload Invalid")
+        raise HTTPException(status_code=400, detail={"message": "Payload Invalid", "code": "1"})
 
 @app.post("/callback", response_model=CallbackResponse)
 async def callback(request: CallbackRequest, authorized: bool = Depends(verify_hmac)):
     logger.info(f"Received callback request for merchant: {request.merchantId}")
+    
+    # Check if merchantId exists
+    merchant = collection.find_one({"fonepay.merchantId": request.merchantId})
+    if not merchant:
+        raise HTTPException(status_code=403, detail={"message": "Invalid MerchantID", "code": "4"})
+
+    # Check if terminalId exists
+    terminal = collection.find_one({"fonepay.merchantId": request.merchantId, "fonepay.terminalId": request.terminalId})
+    if not terminal:
+        raise HTTPException(status_code=403, detail={"message": "Invalid TerminalID", "code": "4"})
     
     # Retrieve the last 5 transactions from MongoDB
     transactions = list(transaction_collection.find(
@@ -266,5 +276,3 @@ async def callback(request: CallbackRequest, authorized: bool = Depends(verify_h
 @app.get("/")
 async def root():
     return {"message": "Notification API for Acquirers is running"}
-
-#need to host server
