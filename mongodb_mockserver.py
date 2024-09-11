@@ -36,3 +36,4 @@ test_devices = [
 
 inserted_ids = collection.insert_many(test_devices).inserted_ids
 print(f"Inserted test devices with IDs: {inserted_ids}")
+
