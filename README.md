@@ -209,5 +209,3 @@ For production deployment:
 - If notifications are not being sent, verify the email and SMS configurations in `email_sender.py`.
 - Check the logs for any error messages or unexpected behavior.
 - Ensure that the Koili IPN integration is configured correctly and the API endpoint is accessible.
-
-
